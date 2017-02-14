@@ -8,16 +8,20 @@ import org.json.JSONObject;
  */
 
 public class CryptoCamPacket {
-    String key = "";
-    String url = "";
+    public String key = "";
+    public String iv = "";
+    public String url = "";
+    public String encryption = "";
     long reconnectIn = 30000;
 
     public static CryptoCamPacket fromJson(JSONObject object){
         CryptoCamPacket packet = new CryptoCamPacket();
         try {
             packet.key = object.getString("key");
+            packet.iv = object.getString("iv");
             packet.url = object.getString("url");
             packet.reconnectIn = object.getLong("reconnectIn");
+            packet.encryption = object.getString("encryption");
 
         } catch (JSONException e) {
             e.printStackTrace();
@@ -28,6 +32,7 @@ public class CryptoCamPacket {
     public CryptoCamPacket(){
         key = "";
         url = "";
+        encryption = "";
         reconnectIn = 30000;
     }
 }

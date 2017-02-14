@@ -12,14 +12,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+
+import uk.ac.openlab.cryptocam.data.Cam;
+import uk.ac.openlab.cryptocam.data.Video;
 
 /**
  * Created by Kyle Montague on 13/02/2017.
@@ -28,13 +34,14 @@ import java.util.UUID;
 public class BLE {
 
     //todo move these into a configuration file / class.
-    final static String deviceName = "CryptoCam";
+    final static String deviceName = "gw-pi";
     final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
     final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
+    long reconnectInterval = 300000;
 
     //todo update this later to use the uuids.
     static boolean isCryptoCam(BluetoothDevice device){
-         return (device.getName() != null && device.getName().equals(deviceName));
+         return (device.getName() != null && device.getName().equalsIgnoreCase(deviceName));
     }
 
 
@@ -77,16 +84,49 @@ public class BLE {
         checkBondedDevices();
     }
 
+
     private void checkBondedDevices() {
         if(mBluetoothAdapter!=null) {
             Set<BluetoothDevice> previousDevices = mBluetoothAdapter.getBondedDevices();
             if (previousDevices != null) {
                 for (BluetoothDevice device : previousDevices) {
                     if (device.getBondState() == BluetoothDevice.BOND_BONDED && isCryptoCam(device)) {
-                        devices.add(device);
+                        addDevice(device);
                     }
                 }
             }
+        }
+    }
+
+
+    private void addDevice(BluetoothDevice device){
+        devices.add(device);
+        List<Cam> cams = Cam.find(Cam.class,"macaddress= ?",(""+device.getAddress()).toLowerCase());
+        if(cams== null || cams.size() == 0)
+        {
+            long id = new Cam(device.getName().toLowerCase(),device.getAddress().toLowerCase()).saveAndNotify(mContext);
+            Log.d(TAG, "Added to database - id:"+id);
+
+        }
+    }
+
+    boolean reconnectDispatched = false;
+    Handler reconnectHandler = new Handler();
+    Runnable reconnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+
+
+            reconnectDispatched = false;
+            connectToBondedDevices();
+        }
+    };
+
+    public void reconnectIn(long delay){
+
+        if(!reconnectDispatched) {
+            reconnectDispatched = true;
+            reconnectHandler.postDelayed(reconnectRunnable, delay);
         }
     }
 
@@ -102,13 +142,17 @@ public class BLE {
             mBluetoothAdapter.cancelDiscovery();
             mContext.unregisterReceiver(mReceiver);
 
-            for(BluetoothDevice device:devices){
-                device.connectGatt(mContext,true,characteristicCallback).discoverServices();
-            }
+            connectToBondedDevices();
         }
 
 
 
+    }
+
+    private void connectToBondedDevices() {
+        for(BluetoothDevice device:devices){
+            BluetoothGatt gatt = device.connectGatt(mContext,false,characteristicCallback);
+        }
     }
 
     public boolean isScanning(){
@@ -118,15 +162,20 @@ public class BLE {
         return false;
     }
 
-    private android.bluetooth.BluetoothGattCallback characteristicCallback = new BluetoothGattCallback() {
+    private boolean isDiscovering = false;
+
+    private BluetoothGattCallback characteristicCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             super.onConnectionStateChange(gatt, status, newState);
 
             switch (newState) {
                 case BluetoothGatt.STATE_CONNECTED:
-                    Log.i("gattCallback", "STATE_CONNECTED");
-                    gatt.discoverServices();
+                    Log.i("gattCallback", String.format("STATE_CONNECTED status:%d newstate:%d",status,newState));
+                    if(!isDiscovering) {
+                        gatt.discoverServices();
+                        isDiscovering = true;
+                    }
                     break;
                 case BluetoothGatt.STATE_DISCONNECTED:
                     Log.e("gattCallback", "STATE_DISCONNECTED");
@@ -140,43 +189,64 @@ public class BLE {
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             super.onServicesDiscovered(gatt, status);
-            Log.d(TAG,"Discover services");
-
-            BluetoothGattService service = gatt.getService(serviceUUID);
-            gatt.readCharacteristic(service.getCharacteristic(characteristicUUID));
-
+            if(isDiscovering) {
+                isDiscovering = false;
+                BluetoothGattService service = gatt.getService(serviceUUID);
+                gatt.readCharacteristic(service.getCharacteristic(characteristicUUID));
+            }
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
 
-            if(characteristic.getUuid() == characteristicUUID){
-                Log.d(TAG,"READ CHARACTERISTIC:"+ characteristic.toString());
+            if(characteristic.getUuid().equals(characteristicUUID)) {
 
                 try {
-                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristic.toString()));
-                    Log.d(TAG,String.format("key: %s, url: %s, reconnect: %d",packet.key,packet.url,packet.reconnectIn));
+                    if (characteristic.getValue() == null)
+                        return;
+                    String jString = new String(characteristic.getValue(),"UTF-8");
+                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
+                    Video v = new Video(packet,gatt.getDevice().getAddress());
+                    if(v!=null)
+                        Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
+                    reconnectInterval = packet.reconnectIn;
                 } catch (JSONException e) {
+                    e.printStackTrace();
+                } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
 
             }
+            gatt.disconnect();
+            gatt.close();
+            reconnectIn(reconnectInterval);
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
-            if(characteristic.getUuid() == characteristicUUID){
-                Log.d(TAG,"READ CHARACTERISTIC:"+ characteristic.toString());
+            if(characteristic.getUuid().equals(characteristicUUID)){
 
                 try {
-                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristic.toString()));
-                    Log.d(TAG,String.format("key: %s, url: %s, reconnect: %d",packet.key,packet.url,packet.reconnectIn));
+                    if(characteristic.getValue() == null)
+                        return;
+                    String jString = new String(characteristic.getValue(),"UTF-8");
+                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
+                    Video v = new Video(packet,gatt.getDevice().getAddress());
+                    if(v!=null)
+                        Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
+                    reconnectInterval = packet.reconnectIn;
                 } catch (JSONException e) {
+                    e.printStackTrace();
+                } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
             }
+            gatt.disconnect();
+            gatt.close();
+            reconnectIn(reconnectInterval);
+
         }
 
 
@@ -194,17 +264,15 @@ public class BLE {
                     Log.d(TAG,BluetoothAdapter.ACTION_DISCOVERY_STARTED);
                     break;
                 case BluetoothAdapter.ACTION_STATE_CHANGED:
-                    Log.d(TAG,BluetoothAdapter.ACTION_STATE_CHANGED);
                     break;
                 case BluetoothAdapter.ACTION_DISCOVERY_FINISHED:
                     Log.d(TAG,BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
                     mContext.unregisterReceiver(mReceiver);
                     break;
                 case BluetoothDevice.ACTION_FOUND:
-                    Log.d(TAG,BluetoothDevice.ACTION_FOUND);
                     Bundle extras = intent.getExtras();
                     if(extras!=null) {
-                        bondWithDevice((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE), deviceName);
+                        bondWithDevice((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE));
                     }
                     break;
             }
@@ -230,7 +298,7 @@ public class BLE {
 //
 //        }
 
-        public void bondWithDevice(BluetoothDevice device, String targetDevice){
+        public void bondWithDevice(BluetoothDevice device){
                  if (device == null)
                      return;
 
@@ -242,8 +310,8 @@ public class BLE {
                         Log.d(TAG, "BOND STATE: " + device.getBondState());
                     }
 
-                    //todo revist this logic to allow multiple devices to be added.
-                    devices.add(device); //currently pointless as i only identify the first cam.
+                    //todo revisit this logic to allow multiple devices to be added.
+                    addDevice(device); //currently pointless as i only identify the first cam.
                     stop(); //will stop after finding the first device.
 
                 }
