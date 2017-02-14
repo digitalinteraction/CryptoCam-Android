@@ -9,6 +9,7 @@ import org.json.JSONObject;
 
 public class CryptoCamPacket {
     String key = "";
+    String iv = "";
     String url = "";
     long reconnectIn = 30000;
 
@@ -16,6 +17,7 @@ public class CryptoCamPacket {
         CryptoCamPacket packet = new CryptoCamPacket();
         try {
             packet.key = object.getString("key");
+            packet.iv = object.getString("iv");
             packet.url = object.getString("url");
             packet.reconnectIn = object.getLong("reconnectIn");
 

@@ -17,6 +17,7 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
@@ -103,7 +104,7 @@ public class BLE {
             mContext.unregisterReceiver(mReceiver);
 
             for(BluetoothDevice device:devices){
-                device.connectGatt(mContext,true,characteristicCallback).discoverServices();
+                BluetoothGatt gatt = device.connectGatt(mContext,false,characteristicCallback);
             }
         }
 
@@ -118,15 +119,20 @@ public class BLE {
         return false;
     }
 
-    private android.bluetooth.BluetoothGattCallback characteristicCallback = new BluetoothGattCallback() {
+    private boolean isDiscovering = false;
+
+    private BluetoothGattCallback characteristicCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             super.onConnectionStateChange(gatt, status, newState);
 
             switch (newState) {
                 case BluetoothGatt.STATE_CONNECTED:
-                    Log.i("gattCallback", "STATE_CONNECTED");
-                    gatt.discoverServices();
+                    Log.i("gattCallback", String.format("STATE_CONNECTED status:%d newstate:%d",status,newState));
+                    if(!isDiscovering) {
+                        gatt.discoverServices();
+                        isDiscovering = true;
+                    }
                     break;
                 case BluetoothGatt.STATE_DISCONNECTED:
                     Log.e("gattCallback", "STATE_DISCONNECTED");
@@ -140,43 +146,57 @@ public class BLE {
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             super.onServicesDiscovered(gatt, status);
+            isDiscovering=false;
             Log.d(TAG,"Discover services");
-
             BluetoothGattService service = gatt.getService(serviceUUID);
             gatt.readCharacteristic(service.getCharacteristic(characteristicUUID));
-
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
 
-            if(characteristic.getUuid() == characteristicUUID){
-                Log.d(TAG,"READ CHARACTERISTIC:"+ characteristic.toString());
+            if(characteristic.getUuid().equals(characteristicUUID)) {
+                Log.d(TAG, "READ CHARACTERISTIC:" + characteristic.toString());
 
                 try {
-                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristic.toString()));
-                    Log.d(TAG,String.format("key: %s, url: %s, reconnect: %d",packet.key,packet.url,packet.reconnectIn));
+                    if (characteristic.getValue() == null)
+                        return;
+                    String jString = new String(characteristic.getValue(), "UTF-8");
+                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
+                    Log.d(TAG, String.format("key: %s, iv: %s, url: %s, reconnect: %d", packet.key, packet.iv, packet.url, packet.reconnectIn));
                 } catch (JSONException e) {
+                    e.printStackTrace();
+                } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
 
             }
+            gatt.disconnect();
+
+            //TODO START TIMER TO RECONNECT
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
-            if(characteristic.getUuid() == characteristicUUID){
+            if(characteristic.getUuid().equals(characteristicUUID)){
                 Log.d(TAG,"READ CHARACTERISTIC:"+ characteristic.toString());
 
                 try {
-                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristic.toString()));
-                    Log.d(TAG,String.format("key: %s, url: %s, reconnect: %d",packet.key,packet.url,packet.reconnectIn));
+                    if(characteristic.getValue() == null)
+                        return;
+                    String jString = new String(characteristic.getValue(),"UTF-8");
+                    CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
+                    Log.d(TAG,String.format("key: %s, iv: %s, url: %s, reconnect: %d",packet.key,packet.iv,packet.url,packet.reconnectIn));
                 } catch (JSONException e) {
+                    e.printStackTrace();
+                } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
             }
+            gatt.disconnect();
+
         }
 
 
@@ -194,17 +214,15 @@ public class BLE {
                     Log.d(TAG,BluetoothAdapter.ACTION_DISCOVERY_STARTED);
                     break;
                 case BluetoothAdapter.ACTION_STATE_CHANGED:
-                    Log.d(TAG,BluetoothAdapter.ACTION_STATE_CHANGED);
                     break;
                 case BluetoothAdapter.ACTION_DISCOVERY_FINISHED:
                     Log.d(TAG,BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
                     mContext.unregisterReceiver(mReceiver);
                     break;
                 case BluetoothDevice.ACTION_FOUND:
-                    Log.d(TAG,BluetoothDevice.ACTION_FOUND);
                     Bundle extras = intent.getExtras();
                     if(extras!=null) {
-                        bondWithDevice((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE), deviceName);
+                        bondWithDevice((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE));
                     }
                     break;
             }
@@ -230,7 +248,7 @@ public class BLE {
 //
 //        }
 
-        public void bondWithDevice(BluetoothDevice device, String targetDevice){
+        public void bondWithDevice(BluetoothDevice device){
                  if (device == null)
                      return;
 
