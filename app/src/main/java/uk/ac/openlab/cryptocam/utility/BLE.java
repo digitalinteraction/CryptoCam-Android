@@ -141,8 +141,6 @@ public class BLE {
         if(mBluetoothAdapter!=null) {
             mBluetoothAdapter.cancelDiscovery();
             mContext.unregisterReceiver(mReceiver);
-
-            connectToBondedDevices();
         }
 
 
@@ -189,11 +187,13 @@ public class BLE {
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             super.onServicesDiscovered(gatt, status);
+
             if(isDiscovering) {
                 isDiscovering = false;
                 BluetoothGattService service = gatt.getService(serviceUUID);
                 gatt.readCharacteristic(service.getCharacteristic(characteristicUUID));
             }
+
         }
 
         @Override
@@ -202,15 +202,18 @@ public class BLE {
 
             if(characteristic.getUuid().equals(characteristicUUID)) {
 
+
                 try {
                     if (characteristic.getValue() == null)
                         return;
+
                     String jString = new String(characteristic.getValue(),"UTF-8");
                     CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
                     Video v = new Video(packet,gatt.getDevice().getAddress());
                     if(v!=null)
                         Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
                     reconnectInterval = packet.reconnectIn;
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 } catch (UnsupportedEncodingException e) {
@@ -219,14 +222,17 @@ public class BLE {
 
             }
             gatt.disconnect();
+
             gatt.close();
             reconnectIn(reconnectInterval);
+
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
             if(characteristic.getUuid().equals(characteristicUUID)){
+
 
                 try {
                     if(characteristic.getValue() == null)
@@ -237,6 +243,7 @@ public class BLE {
                     if(v!=null)
                         Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
                     reconnectInterval = packet.reconnectIn;
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 } catch (UnsupportedEncodingException e) {
@@ -244,8 +251,10 @@ public class BLE {
                 }
             }
             gatt.disconnect();
+
             gatt.close();
             reconnectIn(reconnectInterval);
+
 
         }
 

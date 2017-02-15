@@ -12,6 +12,7 @@ public class CryptoCamPacket {
     public String iv = "";
     public String url = "";
     public String encryption = "";
+
     long reconnectIn = 30000;
 
     public static CryptoCamPacket fromJson(JSONObject object){
