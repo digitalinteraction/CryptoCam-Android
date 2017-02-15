@@ -25,7 +25,12 @@ public class Cam extends SugarRecord {
 
     public Cam(String name, String macaddress){
         this.name = name;
-        this.macaddress = macaddress;
+        this.macaddress = macaddress.toLowerCase();
+    }
+
+    public static boolean exists(String macaddress){
+        long count = Cam.count(Cam.class,"macaddress = ?", new String[]{macaddress.toLowerCase()});
+        return (count > 0);
     }
 
     List<Video> getVideos(){

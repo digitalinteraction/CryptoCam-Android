@@ -4,7 +4,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Created by kylemontague on 13/02/2017.
+ * Created by Kyle Montague on 13/02/2017.
  */
 
 public class CryptoCamPacket {

@@ -16,7 +16,6 @@ import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
 
 public class Video extends SugarRecord {
 
-
     String encryption;
     String key;
     String iv;
@@ -43,7 +42,7 @@ public class Video extends SugarRecord {
         this.key = packet.key;
         this.iv = packet.iv;
         this.url = packet.url;
-        List<Cam> cams = Cam.find(Cam.class,"macaddress = ?",macaddress.toLowerCase());
+        List<Cam> cams = Cam.find(Cam.class,"macaddress = ?",""+macaddress.toLowerCase());
         if(cams!=null && cams.size() > 0){
             this.cam = cams.get(0);
         }

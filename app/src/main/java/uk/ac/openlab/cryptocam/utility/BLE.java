@@ -20,7 +20,6 @@ import org.json.JSONObject;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -34,14 +33,14 @@ import uk.ac.openlab.cryptocam.data.Video;
 public class BLE {
 
     //todo move these into a configuration file / class.
-    final static String deviceName = "gw-pi";
+    final static String deviceName = "gw-";
     final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
     final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
     long reconnectInterval = 300000;
 
     //todo update this later to use the uuids.
     static boolean isCryptoCam(BluetoothDevice device){
-         return (device.getName() != null && device.getName().equalsIgnoreCase(deviceName));
+         return (device.getName() != null && device.getName().toLowerCase().startsWith(deviceName));
     }
 
 
@@ -101,12 +100,10 @@ public class BLE {
 
     private void addDevice(BluetoothDevice device){
         devices.add(device);
-        List<Cam> cams = Cam.find(Cam.class,"macaddress= ?",(""+device.getAddress()).toLowerCase());
-        if(cams== null || cams.size() == 0)
+        if(!Cam.exists(device.getAddress()))
         {
             long id = new Cam(device.getName().toLowerCase(),device.getAddress().toLowerCase()).saveAndNotify(mContext);
             Log.d(TAG, "Added to database - id:"+id);
-
         }
     }
 
@@ -115,8 +112,6 @@ public class BLE {
     Runnable reconnectRunnable = new Runnable() {
         @Override
         public void run() {
-
-
             reconnectDispatched = false;
             connectToBondedDevices();
         }
@@ -141,6 +136,8 @@ public class BLE {
         if(mBluetoothAdapter!=null) {
             mBluetoothAdapter.cancelDiscovery();
             mContext.unregisterReceiver(mReceiver);
+
+            connectToBondedDevices();
         }
 
 
@@ -149,7 +146,8 @@ public class BLE {
 
     private void connectToBondedDevices() {
         for(BluetoothDevice device:devices){
-            BluetoothGatt gatt = device.connectGatt(mContext,false,characteristicCallback);
+            Log.d(TAG,"GATT - Connect:"+device.getAddress());
+            device.connectGatt(mContext,false,characteristicCallback);
         }
     }
 
@@ -169,17 +167,17 @@ public class BLE {
 
             switch (newState) {
                 case BluetoothGatt.STATE_CONNECTED:
-                    Log.i("gattCallback", String.format("STATE_CONNECTED status:%d newstate:%d",status,newState));
-                    if(!isDiscovering) {
+                    Log.d("BLE", String.format("STATE_CONNECTED status:%d newstate:%d",status,newState));
+                    if(!isDiscovering && gatt != null) {
                         gatt.discoverServices();
                         isDiscovering = true;
                     }
                     break;
                 case BluetoothGatt.STATE_DISCONNECTED:
-                    Log.e("gattCallback", "STATE_DISCONNECTED");
+                    Log.d("BLE", "STATE_DISCONNECTED");
                     break;
                 default:
-                    Log.e("gattCallback", "STATE_OTHER");
+                    Log.d("BLE", "STATE_OTHER");
             }
         }
 
@@ -201,15 +199,16 @@ public class BLE {
             super.onCharacteristicRead(gatt, characteristic, status);
 
             if(characteristic.getUuid().equals(characteristicUUID)) {
-
-
                 try {
                     if (characteristic.getValue() == null)
                         return;
-
                     String jString = new String(characteristic.getValue(),"UTF-8");
                     CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
-                    Video v = new Video(packet,gatt.getDevice().getAddress());
+                    BluetoothDevice device = gatt.getDevice();
+                    String macaddress= "";
+                    if(device != null)
+                        macaddress = device.getAddress().toLowerCase();
+                    Video v = new Video(packet,macaddress);
                     if(v!=null)
                         Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
                     reconnectInterval = packet.reconnectIn;
@@ -222,7 +221,6 @@ public class BLE {
 
             }
             gatt.disconnect();
-
             gatt.close();
             reconnectIn(reconnectInterval);
 
@@ -241,7 +239,7 @@ public class BLE {
                     CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
                     Video v = new Video(packet,gatt.getDevice().getAddress());
                     if(v!=null)
-                        Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
+                        v.saveAndNotify(mContext);
                     reconnectInterval = packet.reconnectIn;
 
                 } catch (JSONException e) {

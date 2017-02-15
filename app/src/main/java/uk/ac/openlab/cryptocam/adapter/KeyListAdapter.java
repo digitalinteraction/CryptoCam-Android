@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.data.Video;
@@ -19,21 +20,42 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
 
 
     ArrayList<Video> items;
+    KeyListItemListener listener = null;
+
+
+    public KeyListAdapter(KeyListItemListener listener){
+        this.listener = listener;
+    }
+
 
     public void reloadData(){
         items = new ArrayList<>();
-        items.addAll(Video.listAll(Video.class,"timestamp DESC"));
-        notifyDataSetChanged();
+        List<Video> videos = Video.find(Video.class,null,null,null,"timestamp DESC",null);
+        if(videos!=null && videos.size() >0) {
+            items.addAll(videos);//Video.listAll(Video.class,"timestamp DESC"));
+            notifyDataSetChanged();
+        }
     }
 
     @Override
-    public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    public ViewHolder onCreateViewHolder(final ViewGroup parent, int viewType) {
 
         View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.keylistitem, parent, false);
+        v.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                itemClicked(parent.indexOfChild(v));
+            }
+        });
         ViewHolder vh = new ViewHolder(v);
-
         return vh;
 
+    }
+
+    private void itemClicked(int index) {
+        if(listener!=null){
+            listener.itemSelected(index);
+        }
     }
 
     @Override
@@ -56,5 +78,15 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
             super(itemView);
             title = (TextView)itemView.findViewById(R.id.title);
         }
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return items.get(position).getId();
+    }
+
+    public interface KeyListItemListener{
+
+        void itemSelected(int index);
     }
 }
