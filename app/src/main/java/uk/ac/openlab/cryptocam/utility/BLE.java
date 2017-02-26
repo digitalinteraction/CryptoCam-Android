@@ -23,8 +23,9 @@ import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
 
-import uk.ac.openlab.cryptocam.data.Cam;
-import uk.ac.openlab.cryptocam.data.Video;
+import uk.ac.openlab.cryptocam.models.Cam;
+import uk.ac.openlab.cryptocam.models.Video;
+import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 
 /**
  * Created by Kyle Montague on 13/02/2017.
@@ -32,8 +33,12 @@ import uk.ac.openlab.cryptocam.data.Video;
 
 public class BLE {
 
+    //TODO need to fix the scanning logic - currently will scan until the first device is found matching CC. Should contintue for a minimum period then do the bonding.
+
+
     //todo move these into a configuration file / class.
-    final static String deviceName = "gw-";
+    final static String deviceName = "cc-";
+    private static final long RESCAN_DELAY = 60*1000; // one scan every minute for new cammeras
     final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
     final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
     long reconnectInterval = 300000;
@@ -50,6 +55,8 @@ public class BLE {
     private IntentFilter discoveryIntents;
 
     private Context mContext;
+
+    private boolean mShouldScan = false;
 
     private ArrayList<BluetoothDevice> devices;
 
@@ -103,7 +110,7 @@ public class BLE {
         if(!Cam.exists(device.getAddress()))
         {
             long id = new Cam(device.getName().toLowerCase(),device.getAddress().toLowerCase()).saveAndNotify(mContext);
-            Log.d(TAG, "Added to database - id:"+id);
+            CryptoCamReceiver.newCamera(mContext,id);
         }
     }
 
@@ -127,6 +134,7 @@ public class BLE {
 
     public void start(){
         if(mBluetoothAdapter!=null) {
+            mShouldScan = true;
             mContext.registerReceiver(mReceiver, discoveryIntents);
             mBluetoothAdapter.startDiscovery();
         }
@@ -134,14 +142,28 @@ public class BLE {
 
     public void stop(){
         if(mBluetoothAdapter!=null) {
+            CryptoCamReceiver.startedScanning(mContext);
             mBluetoothAdapter.cancelDiscovery();
             mContext.unregisterReceiver(mReceiver);
-
             connectToBondedDevices();
         }
 
+        if(mShouldScan){
+            Runnable scanRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    start();
+                }
+            };
+            Handler handler = new Handler();
+            handler.postDelayed(scanRunnable,RESCAN_DELAY);
+        }
+    }
 
-
+    public void disable(){
+        CryptoCamReceiver.stoppedScanning(mContext);
+        mShouldScan = false;
+        stop();
     }
 
     private void connectToBondedDevices() {
@@ -258,6 +280,10 @@ public class BLE {
 
 
     };
+
+    public boolean isActive() {
+        return mShouldScan;
+    }
 
 
     public class BLEBroadcastReceiver extends BroadcastReceiver{

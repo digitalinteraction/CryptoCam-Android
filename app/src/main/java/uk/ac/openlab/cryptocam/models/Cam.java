@@ -1,4 +1,4 @@
-package uk.ac.openlab.cryptocam.data;
+package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
 import android.content.Intent;
@@ -21,6 +21,13 @@ public class Cam extends SugarRecord {
         long ID =  super.save();
         context.sendBroadcast(new Intent(DATA_UPDATE_CAM));
         return ID;
+    }
+
+
+    public Cam(){
+        this.name = "";
+        this.macaddress = "";
+
     }
 
     public Cam(String name, String macaddress){

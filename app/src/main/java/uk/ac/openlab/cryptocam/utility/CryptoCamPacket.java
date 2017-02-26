@@ -36,4 +36,7 @@ public class CryptoCamPacket {
         encryption = "";
         reconnectIn = 30000;
     }
+
+
+
 }

@@ -8,12 +8,14 @@ public class DownloadRequest{
 
     String url;
     String path;
-    String filename;
+    String key;
+    String iv;
 
 
-    public DownloadRequest(String url, String path, String targetFilename, String fileExt){
-        this.url = String.format("%s%s",url,fileExt);
+    public DownloadRequest(String url, String path, String key, String iv){
+        this.url = url;
         this.path = path;
-        this.filename = targetFilename;
+        this.key = key;
+        this.iv = iv;
     }
 }

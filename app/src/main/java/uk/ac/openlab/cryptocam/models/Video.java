@@ -1,12 +1,19 @@
-package uk.ac.openlab.cryptocam.data;
+package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 
 import com.orm.SugarRecord;
+import com.orm.dsl.Ignore;
 
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
 
@@ -15,6 +22,13 @@ import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
  */
 
 public class Video extends SugarRecord {
+
+    @Ignore
+    private static final String VIDEO_FORMAT = ".mp4";
+    @Ignore
+    private static final String THUMBNAIL_FORMAT = ".jpg";
+    @Ignore
+    private static final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd MMM - hh:mm:ss",Locale.ENGLISH);
 
     String encryption;
     String key;
@@ -75,15 +89,64 @@ public class Video extends SugarRecord {
         return key;
     }
 
+
+
+    public String getIV(){
+        return iv;
+    }
+
     public Date getTimestamp() {
         return timestamp;
     }
 
-    public String getUrl() {
-        return url;
+    public String getVideoUrl() {
+        return url+VIDEO_FORMAT;
+    }
+
+    public String getThumbnailUrl() {
+        return url+THUMBNAIL_FORMAT;
+    }
+
+
+    //todo hardcode the file path to search in.
+    public String checkForLocalVideo(String filepath){
+        try {
+            URL url = new URL(getVideoUrl());
+            File file = new File(filepath,url.getFile());
+            Log.d("FILE",file.getAbsolutePath());
+            if(file.exists())
+                return file.getAbsolutePath();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+
+    //todo hardcode the file path to search in.
+    public String checkForLocalThumbnail(String filepath){
+        try {
+            URL url = new URL(getThumbnailUrl());
+
+
+            File file = new File(filepath,url.getFile());
+            Log.d("FILE",file.getAbsolutePath());
+            if(file.exists())
+                 return file.getAbsolutePath();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public String getDateString(){
+        return simpleDateFormat.format(timestamp);
     }
 
     public Cam getCam() {
         return cam;
     }
+
+
+
 }

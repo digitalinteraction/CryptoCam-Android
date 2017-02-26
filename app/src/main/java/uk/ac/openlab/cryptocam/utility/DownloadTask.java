@@ -5,12 +5,18 @@ import android.os.AsyncTask;
 import android.os.PowerManager;
 import android.util.Log;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Created by kylemontague on 15/02/2017.
@@ -27,40 +33,45 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
     }
 
     @Override
-    protected String doInBackground(DownloadRequest... sUrl) {
+    protected String doInBackground(DownloadRequest... requests) {
         InputStream input = null;
         OutputStream output = null;
         HttpURLConnection connection = null;
+        String local = null;
         try {
-            URL url = new URL(sUrl[0].url);
+            URL url = new URL(requests[0].url);
+
             connection = (HttpURLConnection) url.openConnection();
             connection.connect();
 
 
-            Log.d(TAG,"URL:"+url.toString());
-            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                return "Server returned HTTP " + connection.getResponseCode()
-                        + " " + connection.getResponseMessage();
-            }
-
-            // this will be useful to display download percentage
-            // might be -1: server did not report the length
             int fileLength = connection.getContentLength();
 
-            // download the file
             input = connection.getInputStream();
-            String remote = String.format("%s%s",sUrl[0].path,sUrl[0].filename);
-            Log.d(TAG,"Remote:"+remote);
+            local = String.format("%s%s",requests[0].path, url.getFile());
 
-            output = new FileOutputStream(remote);
+            //Check if the directory exists.
+            File t = new File(local);
+            //FIXME crashing here for some reason - need to ensure that the cyroptocam directory existings. could do this on boot of the service instead.
+//            if(!t.getParentFile().mkdirs())
+//                return local;
+
+
+            output = new FileOutputStream(local);
+
+            SecretKeySpec sks = new SecretKeySpec(DownloadTask.hexStringToByteArray(requests[0].key), "AES/CBC/NoPadding");
+            Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, sks, new IvParameterSpec(DownloadTask.hexStringToByteArray(requests[0].iv)));
+            CipherInputStream cis = new CipherInputStream(input, cipher);
+
 
             byte data[] = new byte[4096];
             long total = 0;
             int count;
-            while ((count = input.read(data)) != -1) {
+            while ((count = cis.read(data)) != -1) {
                 // allow canceling with back button
                 if (isCancelled()) {
-                    input.close();
+                    cis.close();
                     return null;
                 }
                 total += count;
@@ -70,7 +81,8 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
                 output.write(data, 0, count);
             }
         } catch (Exception e) {
-            return e.toString();
+            Log.e("File",e.toString());
+            return null;
         } finally {
             try {
                 if (output != null)
@@ -83,7 +95,7 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
             if (connection != null)
                 connection.disconnect();
         }
-        return null;
+        return local;
     }
 
 
@@ -110,6 +122,17 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
 
     }
 
+
+    public static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len/2];
+
+        for(int i = 0; i < len; i+=2){
+            data[i/2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i+1), 16));
+        }
+
+        return data;
+    }
 
 
 }
