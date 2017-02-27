@@ -28,6 +28,7 @@ public class CryptoCamScanService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         mBle.init();
         mBle.start();
+        CryptoCamNotificationService.showNotification(this);
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -36,6 +37,8 @@ public class CryptoCamScanService extends Service {
     @Override
     public boolean stopService(Intent name) {
         mBle.disable();
+        CryptoCamNotificationService.dismissNotification(this);
+
         return super.stopService(name);
     }
 
@@ -43,6 +46,7 @@ public class CryptoCamScanService extends Service {
     public boolean isActive(){
         return mBle.isActive();
     }
+
 
     public class CryptoCamBinder extends Binder{
 

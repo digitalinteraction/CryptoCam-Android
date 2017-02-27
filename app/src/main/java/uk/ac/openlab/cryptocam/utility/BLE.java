@@ -39,8 +39,10 @@ public class BLE {
     //todo move these into a configuration file / class.
     final static String deviceName = "cc-";
     private static final long RESCAN_DELAY = 60*1000; // one scan every minute for new cammeras
-    final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
+    final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001"); //will soon be 0000
     final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
+    final UUID camDetailUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
+
     long reconnectInterval = 300000;
 
     //todo update this later to use the uuids.

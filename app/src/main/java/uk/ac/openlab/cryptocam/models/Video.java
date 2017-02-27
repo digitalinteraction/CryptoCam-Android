@@ -30,6 +30,16 @@ public class Video extends SugarRecord {
     @Ignore
     private static final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd MMM - hh:mm:ss",Locale.ENGLISH);
 
+
+    @Ignore
+    public int attemptCount = 0;
+
+    @Ignore
+    public String localThumb = null;
+
+    @Ignore
+    public String localVideo = null;
+
     String encryption;
     String key;
     String iv;

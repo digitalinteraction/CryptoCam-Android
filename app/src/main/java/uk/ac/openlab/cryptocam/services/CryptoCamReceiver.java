@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.util.Log;
 
 import java.net.URI;
 
@@ -66,16 +67,23 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
-        String uri = intent.getExtras().getString(EXTRA_URI,null);
-        long id = intent.getExtras().getLong(EXTRA_ID,-1);
+        String uri = null;
+        if(intent.getExtras()!=null) {
+            try {
+                uri = intent.getExtras().getString(EXTRA_URI, null);
+            }catch (Exception e){
+                Log.e(TAG,e.toString());
+            }
+            long id = intent.getExtras().getLong(EXTRA_ID, -1);
 
-        switch (action){
-            case ACTION_VIDEO_DOWNLOADED:
-                downloadedVideo(URI.create(uri),id);
-                break;
-            case ACTION_THUMBNAIL_DOWNLOADED:
-                downloadedThumbnail(URI.create(uri),id);
-                break;
+            switch (action) {
+                case ACTION_VIDEO_DOWNLOADED:
+                    downloadedVideo(URI.create(uri), id);
+                    break;
+                case ACTION_THUMBNAIL_DOWNLOADED:
+                    downloadedThumbnail(URI.create(uri), id);
+                    break;
+            }
         }
     }
 

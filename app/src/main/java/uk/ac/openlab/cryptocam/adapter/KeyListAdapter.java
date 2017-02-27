@@ -8,8 +8,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +21,7 @@ import uk.ac.openlab.cryptocam.utility.DownloadTask;
  * Created by Kyle Montague on 13/02/2017.
  */
 
-public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHolder>  {
+public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
 
 
     ArrayList<Video> items;
@@ -51,16 +49,13 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
     public ViewHolder onCreateViewHolder(final ViewGroup parent, int viewType) {
 
         View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.keylistitem, parent, false);
-        v.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                itemClicked(parent.indexOfChild(v));
-            }
-        });
+
         ViewHolder vh = new ViewHolder(v);
         return vh;
 
     }
+
+
 
     private void itemClicked(int index) {
         if(listener!=null){
@@ -72,17 +67,47 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
 
 
     @Override
-    public void onBindViewHolder(ViewHolder holder, int position) {
+    public void onBindViewHolder(final KeyListViewHolder holder, int position) {
 
         String text = items.get(position).getDateString();
         holder.title.setText(text);
 
-        String local = items.get(position).checkForLocalThumbnail(thumbpath);
-        if(local != null){
-            holder.imageView.setImageURI(Uri.parse(local));
+        holder.interactiveArea.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                itemClicked(holder.getAdapterPosition());
+
+
+            }
+        });
+
+        //fixme could do in a thread. then call invalidate when it comes back.
+        if(items.get(position).localThumb == null && items.get(position).attemptCount < 2) {
+            items.get(position).localThumb = items.get(position).checkForLocalThumbnail(thumbpath);
+            items.get(position).attemptCount++;
+        }
+
+        if(items.get(position).localVideo == null && items.get(position).attemptCount < 2)
+            items.get(position).localVideo = items.get(position).checkForLocalVideo(thumbpath);
+
+        if(items.get(position).localThumb != null){
+            holder.actionState.setVisibility(View.VISIBLE);
+            holder.imageView.setImageURI(Uri.parse(items.get(position).localThumb));
         }else{
+            holder.actionState.setVisibility(View.INVISIBLE);
             holder.imageView.setImageResource(R.mipmap.ic_launcher);
         }
+
+
+
+        if(items.get(position).localVideo != null) {
+            holder.actionState.setImageResource(R.mipmap.ic_play);
+        }else{
+            holder.actionState.setImageResource(R.mipmap.ic_download);
+        }
+        holder.actionState.setVisibility(View.VISIBLE);
+        holder.progressView.hide();
+
     }
 
     @Override
@@ -90,23 +115,19 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
         return items.size();
     }
 
-    public class ViewHolder extends RecyclerView.ViewHolder {
-
-        TextView title;
-        ImageView imageView;
-
-
+    public class ViewHolder extends KeyListViewHolder {
         public ViewHolder(View itemView) {
             super(itemView);
-            title = (TextView)itemView.findViewById(R.id.title);
-            imageView = (ImageView)itemView.findViewById(R.id.image);
+
         }
     }
+
 
     @Override
     public long getItemId(int position) {
         return items.get(position).getId();
     }
+
 
 
     private void getThumbnails(){
@@ -123,7 +144,6 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListAdapter.ViewHold
     }
 
     public interface KeyListItemListener{
-
         void itemSelected(int index);
     }
 }

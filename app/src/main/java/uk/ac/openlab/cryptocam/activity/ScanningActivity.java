@@ -14,12 +14,14 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 
 import java.io.File;
 import java.net.URI;
 
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.adapter.KeyListAdapter;
+import uk.ac.openlab.cryptocam.adapter.KeyListViewHolder;
 import uk.ac.openlab.cryptocam.models.Video;
 import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 import uk.ac.openlab.cryptocam.services.CryptoCamScanService;
@@ -29,6 +31,7 @@ import uk.ac.openlab.cryptocam.utility.DownloadTask;
 public class ScanningActivity extends AppCompatActivity implements KeyListAdapter.KeyListItemListener{
 
 
+    private static final String TAG = "UI";
     RecyclerView list;
     KeyListAdapter adapter;
 
@@ -149,11 +152,35 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
 
     @Override
     public void itemSelected(int index) {
+
         Video v = Video.findById(Video.class,adapter.getItemId(index));
+
+
+
         String local = v.checkForLocalVideo(path);
+
         if(local == null) {
+            final KeyListViewHolder holder = (KeyListViewHolder)list.findViewHolderForAdapterPosition(index);
+            holder.showProgress(true);
+
             DownloadRequest request = new DownloadRequest(v.getVideoUrl(), path, v.getKey(), v.getIV());
-            new DownloadTask(this).execute(request);
+            DownloadTask.DownloadTaskProgress progress = new DownloadTask.DownloadTaskProgress() {
+                @Override
+                public void onProgressUpdate(int progress) {
+                    Log.d(TAG,progress+"%");
+                }
+
+                @Override
+                public void onDownloadComplete(boolean successful, String uri) {
+                    if(successful) {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+                        intent.setDataAndType(Uri.parse(uri), "video/*");
+                        startActivity(intent);
+                        holder.showProgress(false);
+                    }
+                }
+            };
+            new DownloadTask(this,progress).execute(request);
         }else{
             //todo open video
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(local));

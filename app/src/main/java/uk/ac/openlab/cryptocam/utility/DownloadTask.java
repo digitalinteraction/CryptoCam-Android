@@ -26,10 +26,16 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
 
     public static final String TAG = "DownloadTask";
     private Context context;
+    private DownloadTaskProgress progressListener = null;
     private PowerManager.WakeLock mWakeLock;
 
     public DownloadTask(Context context) {
         this.context = context;
+    }
+
+    public DownloadTask(Context context, DownloadTaskProgress progressListener){
+        this.context=context;
+        this.progressListener = progressListener;
     }
 
     @Override
@@ -114,11 +120,15 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
     protected void onProgressUpdate(Integer... progress) {
         super.onProgressUpdate(progress);
         // if we get here, length is known, now set indeterminate to false
+        if(progressListener!=null)
+            progressListener.onProgressUpdate(progress[0]);
     }
 
     @Override
     protected void onPostExecute(String result) {
         mWakeLock.release();
+        if(progressListener!=null)
+            progressListener.onDownloadComplete(result!=null,result);
 
     }
 
@@ -135,4 +145,8 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
     }
 
 
+    public interface DownloadTaskProgress{
+        void onProgressUpdate(int progress);
+        void onDownloadComplete(boolean successful, String uri);
+    }
 }
