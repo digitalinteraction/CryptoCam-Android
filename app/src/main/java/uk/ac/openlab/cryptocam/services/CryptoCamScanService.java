@@ -5,15 +5,15 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 
-import uk.ac.openlab.cryptocam.utility.BLE;
+import uk.ac.openlab.cryptocam.utility.BLERx;
+import uk.ac.openlab.cryptocam.utility.Loc;
 
 public class CryptoCamScanService extends Service {
 
-    BLE mBle;
+    BLERx mBle;
     CryptoCamBinder mBinder = new CryptoCamBinder();
 
     public CryptoCamScanService() {
-        mBle = new BLE(this);
     }
 
     @Override
@@ -26,8 +26,13 @@ public class CryptoCamScanService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        mBle.init();
-        mBle.start();
+        if(mBle == null)
+            mBle = new BLERx(getBaseContext());
+
+
+        Loc.shared(getBaseContext());//initialise the shared instance of the location helper.
+
+        mBle.startScanning();
         CryptoCamNotificationService.showNotification(this);
         return super.onStartCommand(intent, flags, startId);
     }
@@ -36,7 +41,7 @@ public class CryptoCamScanService extends Service {
 
     @Override
     public boolean stopService(Intent name) {
-        mBle.disable();
+        mBle.stopScanning();
         CryptoCamNotificationService.dismissNotification(this);
 
         return super.stopService(name);

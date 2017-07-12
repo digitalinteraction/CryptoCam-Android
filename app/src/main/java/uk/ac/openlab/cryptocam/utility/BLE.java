@@ -38,6 +38,7 @@ public class BLE {
 
     //todo move these into a configuration file / class.
     final static String deviceName = "cc-";
+    private static final long SCAN_DURATION = 15*1000; // can change this
     private static final long RESCAN_DELAY = 60*1000; // one scan every minute for new cammeras
     final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001"); //will soon be 0000
     final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
@@ -118,12 +119,9 @@ public class BLE {
 
     boolean reconnectDispatched = false;
     Handler reconnectHandler = new Handler();
-    Runnable reconnectRunnable = new Runnable() {
-        @Override
-        public void run() {
-            reconnectDispatched = false;
-            connectToBondedDevices();
-        }
+    Runnable reconnectRunnable = () -> {
+        reconnectDispatched = false;
+        connectToBondedDevices();
     };
 
     public void reconnectIn(long delay){
@@ -134,31 +132,34 @@ public class BLE {
         }
     }
 
+
+    Handler stopScanHandler = new Handler();
+    Runnable stopScanRunnable = () -> stop();
+
+
+    Runnable scanRunnable = () -> start();
+    Handler startScanHandler = new Handler();
+
     public void start(){
         if(mBluetoothAdapter!=null) {
+            CryptoCamReceiver.startedScanning(mContext);
             mShouldScan = true;
             mContext.registerReceiver(mReceiver, discoveryIntents);
             mBluetoothAdapter.startDiscovery();
+            stopScanHandler.postDelayed(stopScanRunnable,SCAN_DURATION);
         }
     }
 
     public void stop(){
         if(mBluetoothAdapter!=null) {
-            CryptoCamReceiver.startedScanning(mContext);
+            CryptoCamReceiver.stoppedScanning(mContext);
             mBluetoothAdapter.cancelDiscovery();
             mContext.unregisterReceiver(mReceiver);
             connectToBondedDevices();
         }
 
         if(mShouldScan){
-            Runnable scanRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    start();
-                }
-            };
-            Handler handler = new Handler();
-            handler.postDelayed(scanRunnable,RESCAN_DELAY);
+            startScanHandler.postDelayed(scanRunnable,RESCAN_DELAY);
         }
     }
 
@@ -233,13 +234,10 @@ public class BLE {
                     if(device != null)
                         macaddress = device.getAddress().toLowerCase();
                     Video v = new Video(packet,macaddress);
-                    if(v!=null)
-                        Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
+                    Log.d(TAG,"ID: "+v.saveAndNotify(mContext));
                     reconnectInterval = packet.reconnectIn;
 
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                } catch (UnsupportedEncodingException e) {
+                } catch (JSONException | UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
 
@@ -262,13 +260,10 @@ public class BLE {
                     String jString = new String(characteristic.getValue(),"UTF-8");
                     CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
                     Video v = new Video(packet,gatt.getDevice().getAddress());
-                    if(v!=null)
-                        v.saveAndNotify(mContext);
+                    v.saveAndNotify(mContext);
                     reconnectInterval = packet.reconnectIn;
 
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                } catch (UnsupportedEncodingException e) {
+                } catch (JSONException | UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
             }
@@ -307,7 +302,7 @@ public class BLE {
                 case BluetoothDevice.ACTION_FOUND:
                     Bundle extras = intent.getExtras();
                     if(extras!=null) {
-                        bondWithDevice((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE));
+                        addToBondList((BluetoothDevice)extras.getParcelable(BluetoothDevice.EXTRA_DEVICE));
                     }
                     break;
             }
@@ -333,6 +328,15 @@ public class BLE {
 //
 //        }
 
+
+        public void addToBondList(BluetoothDevice device){
+            if (device == null)
+                return;
+            if (isCryptoCam(device)){
+                addDevice(device);
+            }
+        }
+
         public void bondWithDevice(BluetoothDevice device){
                  if (device == null)
                      return;
@@ -344,11 +348,6 @@ public class BLE {
                     }else{
                         Log.d(TAG, "BOND STATE: " + device.getBondState());
                     }
-
-                    //todo revisit this logic to allow multiple devices to be added.
-                    addDevice(device); //currently pointless as i only identify the first cam.
-                    stop(); //will stop after finding the first device.
-
                 }
         }
     }

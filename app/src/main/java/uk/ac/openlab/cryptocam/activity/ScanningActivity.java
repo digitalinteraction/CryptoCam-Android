@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Bundle;
@@ -15,6 +14,8 @@ import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+
+import com.tbruyelle.rxpermissions2.RxPermissions;
 
 import java.io.File;
 import java.net.URI;
@@ -35,7 +36,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
     RecyclerView list;
     KeyListAdapter adapter;
 
-
+    RxPermissions rxPermissions;
 
     Intent serviceIntent;
 
@@ -44,7 +45,6 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
     String path = Environment.getExternalStorageDirectory().getAbsolutePath();
 
 
-    IntentFilter dataUpdateFilter = new IntentFilter(Video.DATA_UPDATE_VIDEO);
     CryptoCamReceiver dataUpdateReceiver = new CryptoCamReceiver() {
         @Override
         public void downloadedVideo(URI uri, long id) {
@@ -54,11 +54,19 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
         @Override
         public void downloadedThumbnail(URI uri, long id) {
             super.downloadedThumbnail(uri, id);
+            adapter.reloadData();
         }
 
         @Override
         public void videoAdded(long id) {
             super.videoAdded(id);
+            adapter.reloadData();
+        }
+
+
+        @Override
+        public void newVideoKey(long id) {
+            super.newVideoKey(id);
             adapter.reloadData();
         }
     };
@@ -104,6 +112,9 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
 
         list.invalidate();
 
+
+
+
         // Quick permission check
         int permissionCheck = 0;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -111,7 +122,6 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
             permissionCheck += this.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION);
             permissionCheck += this.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             if (permissionCheck != 0) {
-
                 this.requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1001); //Any number
             }
         }
@@ -122,9 +132,8 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
     protected void onResume() {
         super.onResume();
         adapter.reloadData();
-        this.registerReceiver(dataUpdateReceiver,dataUpdateFilter);
+        CryptoCamReceiver.registerReceiver(this,dataUpdateReceiver);
         checkDirectory();
-
 
     }
 

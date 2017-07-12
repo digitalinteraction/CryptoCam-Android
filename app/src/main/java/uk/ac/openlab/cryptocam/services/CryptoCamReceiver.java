@@ -16,6 +16,8 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
 
 
     public static final String ACTION_NEW_CAMERA = "CRYPTO_CAM.ACTION.NEW_CAMERA";
+    public static final String ACTION_VIDEO_KEYS = "CRYPTO_CAM.ACTION.VIDEO_KEYS";
+
     public static final String ACTION_VIDEO_DOWNLOADED = "CRYPTO_CAM.ACTION.VIDEO_DOWNLOADED";
     public static final String ACTION_THUMBNAIL_DOWNLOADED = "CRYPTO_CAM.ACTION.THUMBNAIL_DOWNLOADED";
 
@@ -31,6 +33,7 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
 
     public static void registerReceiver(Context context, CryptoCamReceiver receiver){
         IntentFilter filter = new IntentFilter(ACTION_NEW_CAMERA);
+        filter.addAction(ACTION_VIDEO_KEYS);
         filter.addAction(ACTION_VIDEO_DOWNLOADED);
         filter.addAction(ACTION_THUMBNAIL_DOWNLOADED);
         context.registerReceiver(receiver, filter);
@@ -42,6 +45,12 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
         i.putExtra(EXTRA_ID,id);
         context.sendBroadcast(i);
     }
+
+
+    public static void newKey(Context context){
+        broadcast(context, ACTION_VIDEO_KEYS);
+    }
+
 
     public static void newVideo(Context context){
         broadcast(context, ACTION_VIDEO_DOWNLOADED);
@@ -82,6 +91,9 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
                     break;
                 case ACTION_THUMBNAIL_DOWNLOADED:
                     downloadedThumbnail(URI.create(uri), id);
+                    break;
+                case ACTION_VIDEO_KEYS:
+                    newVideoKey(id);
                     break;
             }
         }
@@ -124,6 +136,12 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
 
     @Override
     public void videoAdded(long id) {
+
+    }
+
+
+    @Override
+    public void newVideoKey(long id){
 
     }
 }

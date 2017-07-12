@@ -1,7 +1,6 @@
 package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
-import android.content.Intent;
 import android.util.Log;
 
 import com.orm.SugarRecord;
@@ -15,6 +14,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
 
 /**
@@ -56,7 +56,7 @@ public class Video extends SugarRecord {
     public final static String DATA_UPDATE_VIDEO = "SUGAR_RECORD.DATA_UPDATE.VIDEO";
     public long saveAndNotify(Context context) {
         long ID =  super.save();
-        context.sendBroadcast(new Intent(DATA_UPDATE_VIDEO));
+        CryptoCamReceiver.newKey(context);
         return ID;
     }
 

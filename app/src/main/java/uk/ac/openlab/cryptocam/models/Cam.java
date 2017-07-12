@@ -2,8 +2,10 @@ package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
 import android.content.Intent;
+import android.location.Location;
 
 import com.orm.SugarRecord;
+
 import java.util.List;
 
 /**
@@ -14,6 +16,8 @@ public class Cam extends SugarRecord {
 
     public String macaddress;
     public String name;
+
+    public Location location;
 
 
     public final static String DATA_UPDATE_CAM = "SUGAR_RECORD.DATA_UPDATE.CAM";
@@ -35,6 +39,12 @@ public class Cam extends SugarRecord {
         this.macaddress = macaddress.toLowerCase();
     }
 
+
+    public Cam(String name, String macaddress, Location location){
+        this.name = name;
+        this.macaddress = macaddress.toLowerCase();
+        this.location = location;
+    }
     public static boolean exists(String macaddress){
         long count = Cam.count(Cam.class,"macaddress = ?", new String[]{macaddress.toLowerCase()});
         return (count > 0);

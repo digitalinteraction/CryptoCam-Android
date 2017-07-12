@@ -9,6 +9,10 @@ import com.orm.SugarContext;
  */
 
 public class CryptoCamApplication extends Application {
+
+
+
+
     @Override
     public void onCreate() {
         super.onCreate();
