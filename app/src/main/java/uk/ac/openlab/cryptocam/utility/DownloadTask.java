@@ -5,7 +5,6 @@ import android.os.AsyncTask;
 import android.os.PowerManager;
 import android.util.Log;
 
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,15 +53,8 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
             int fileLength = connection.getContentLength();
 
             input = connection.getInputStream();
-            local = String.format("%s%s",requests[0].path, url.getFile());
-
-            //Check if the directory exists.
-            File t = new File(local);
-            //FIXME crashing here for some reason - need to ensure that the cyroptocam directory existings. could do this on boot of the service instead.
-//            if(!t.getParentFile().mkdirs())
-//                return local;
-
-
+            String[] parts = url.getFile().split("/");
+            local = String.format("%s/%s",requests[0].path, parts[parts.length-1]);
             output = new FileOutputStream(local);
 
             SecretKeySpec sks = new SecretKeySpec(DownloadTask.hexStringToByteArray(requests[0].key), "AES/CBC/NoPadding");
@@ -86,11 +78,13 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
                     publishProgress((int) (total * 100 / fileLength));
                 output.write(data, 0, count);
             }
+            cis.close();
         } catch (Exception e) {
             Log.e("File",e.toString());
             return null;
         } finally {
             try {
+
                 if (output != null)
                     output.close();
                 if (input != null)

@@ -7,6 +7,7 @@ import android.location.Location;
 import com.orm.SugarRecord;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Created by Kyle Montague on 27/01/2017.
@@ -16,6 +17,9 @@ public class Cam extends SugarRecord {
 
     public String macaddress;
     public String name;
+    public String version;
+    public String mode;
+    public String location_type;
 
     public Location location;
 
@@ -45,6 +49,8 @@ public class Cam extends SugarRecord {
         this.macaddress = macaddress.toLowerCase();
         this.location = location;
     }
+
+
     public static boolean exists(String macaddress){
         long count = Cam.count(Cam.class,"macaddress = ?", new String[]{macaddress.toLowerCase()});
         return (count > 0);
@@ -61,4 +67,12 @@ public class Cam extends SugarRecord {
     public String getName() {
         return name;
     }
+
+
+    public String description(){
+        if(location_type == null)
+            location_type = "";
+        return String.format(Locale.getDefault(),"%s\n%s",name,location_type);
+    }
+
 }

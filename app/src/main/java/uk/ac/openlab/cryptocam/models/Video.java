@@ -1,7 +1,6 @@
 package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.orm.SugarRecord;
 import com.orm.dsl.Ignore;
@@ -34,11 +33,8 @@ public class Video extends SugarRecord {
     @Ignore
     public int attemptCount = 0;
 
-    @Ignore
-    public String localThumb = null;
-
-    @Ignore
-    public String localVideo = null;
+    public String localthumb;
+    public String localvideo;
 
     String encryption;
     String key;
@@ -51,6 +47,7 @@ public class Video extends SugarRecord {
     public Video(){
 
     }
+
 
 
     public final static String DATA_UPDATE_VIDEO = "SUGAR_RECORD.DATA_UPDATE.VIDEO";
@@ -118,14 +115,18 @@ public class Video extends SugarRecord {
     }
 
 
-    //todo hardcode the file path to search in.
+
     public String checkForLocalVideo(String filepath){
         try {
             URL url = new URL(getVideoUrl());
-            File file = new File(filepath,url.getFile());
-            Log.d("FILE",file.getAbsolutePath());
-            if(file.exists())
+            String[] parts = url.getFile().split("/");
+
+            File file = new File(filepath,parts[parts.length-1]);
+            if(file.exists()) {
+                localvideo = file.getAbsolutePath();
+                save();
                 return file.getAbsolutePath();
+            }
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
@@ -133,21 +134,24 @@ public class Video extends SugarRecord {
     }
 
 
-    //todo hardcode the file path to search in.
     public String checkForLocalThumbnail(String filepath){
         try {
             URL url = new URL(getThumbnailUrl());
 
+            String[] parts = url.getFile().split("/");
 
-            File file = new File(filepath,url.getFile());
-            Log.d("FILE",file.getAbsolutePath());
-            if(file.exists())
-                 return file.getAbsolutePath();
+            File file = new File(filepath,parts[parts.length-1]);
+            if(file.exists()) {
+                localthumb = file.getAbsolutePath();
+                save();
+                return file.getAbsolutePath();
+            }
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
         return null;
     }
+
 
     public String getDateString(){
         return simpleDateFormat.format(timestamp);

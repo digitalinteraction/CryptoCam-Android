@@ -2,7 +2,6 @@ package uk.ac.openlab.cryptocam.adapter;
 
 import android.content.Context;
 import android.net.Uri;
-import android.os.Environment;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -12,7 +11,9 @@ import android.view.ViewGroup;
 import java.util.ArrayList;
 import java.util.List;
 
+import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
+import uk.ac.openlab.cryptocam.models.Cam;
 import uk.ac.openlab.cryptocam.models.Video;
 import uk.ac.openlab.cryptocam.utility.DownloadRequest;
 import uk.ac.openlab.cryptocam.utility.DownloadTask;
@@ -27,7 +28,15 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
     ArrayList<Video> items;
     KeyListItemListener listener = null;
     Context context;
-    private final String thumbpath = Environment.getExternalStorageDirectory().getAbsolutePath();
+    Mode mode = Mode.CAM;
+
+    enum Mode{
+        CAM,
+        VIDEO
+    }
+
+
+    private final String thumbpath = CryptoCamApplication.directory();
 
     public KeyListAdapter(Context context, KeyListItemListener listener){
         this.listener = listener;
@@ -36,8 +45,37 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
 
 
     public void reloadData(){
+        mode = Mode.VIDEO;
+        setData(Video.find(Video.class,null,null,null,"timestamp DESC",null));
+    }
+
+    public void loadCameras(){
+
+        List<Cam> cameras = Cam.find(Cam.class,null,null,null,"name",null);
+        ArrayList<Video> videos= new ArrayList<>();
+        for(Cam camera:cameras){
+
+            List<Video> tmp =Video.find(Video.class,"cam = ? AND localthumb NOT NULL",new String[]{String.valueOf(camera.getId())},null,"timestamp DESC","1");
+            if(tmp.size() == 0)
+                tmp =Video.find(Video.class,"cam = ?",new String[]{String.valueOf(camera.getId())},null,"timestamp DESC","1");
+
+            if(tmp.size() > 0)
+                videos.add(tmp.get(0));
+        }
+
+
+
+        mode = Mode.CAM;
+        setData(videos);
+    }
+
+    public void loadCameraVideos(String cameraID){
+        mode = Mode.VIDEO;
+        setData(Video.find(Video.class,"cam = ?",new String[]{cameraID},null,"timestamp DESC",null));
+    }
+
+    public void setData(List<Video> videos){
         items = new ArrayList<>();
-        List<Video> videos = Video.find(Video.class,null,null,null,"timestamp DESC",null);
         if(videos!=null && videos.size() >0) {
             items.addAll(videos);//Video.listAll(Video.class,"timestamp DESC"));
             getThumbnails();
@@ -70,6 +108,15 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
     public void onBindViewHolder(final KeyListViewHolder holder, int position) {
 
         String text = items.get(position).getDateString();
+        if(mode == Mode.CAM) {
+            Cam cam = items.get(position).getCam();
+            if (cam != null) {
+                text = cam.description();
+            }else{
+                text = "Unknown";
+            }
+        }
+
         holder.title.setText(text);
 
         holder.interactiveArea.setOnClickListener(new View.OnClickListener() {
@@ -82,28 +129,31 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
         });
 
         //fixme could do in a thread. then call invalidate when it comes back.
-        if(items.get(position).localThumb == null && items.get(position).attemptCount < 2) {
-            items.get(position).localThumb = items.get(position).checkForLocalThumbnail(thumbpath);
+        if(items.get(position).localthumb == null && items.get(position).attemptCount < 2) {
+            items.get(position).localthumb = items.get(position).checkForLocalThumbnail(thumbpath);
             items.get(position).attemptCount++;
         }
 
-        if(items.get(position).localVideo == null && items.get(position).attemptCount < 2)
-            items.get(position).localVideo = items.get(position).checkForLocalVideo(thumbpath);
+        if(items.get(position).localvideo == null && items.get(position).attemptCount < 2)
+            items.get(position).localvideo = items.get(position).checkForLocalVideo(thumbpath);
 
-        if(items.get(position).localThumb != null){
+        if(items.get(position).localthumb != null){
             holder.actionState.setVisibility(View.VISIBLE);
-            holder.imageView.setImageURI(Uri.parse(items.get(position).localThumb));
+            holder.imageView.setImageURI(Uri.parse(items.get(position).localthumb));
         }else{
             holder.actionState.setVisibility(View.INVISIBLE);
             holder.imageView.setImageResource(R.mipmap.ic_launcher);
         }
 
 
-
-        if(items.get(position).localVideo != null) {
-            holder.actionState.setImageResource(R.mipmap.ic_play);
-        }else{
-            holder.actionState.setImageResource(R.mipmap.ic_download);
+        if(mode == Mode.CAM) {
+            holder.actionState.setImageResource(R.drawable.ic_linked_camera);
+        }else {
+            if (items.get(position).localvideo != null || items.get(position).checkForLocalVideo(thumbpath) != null) {
+                holder.actionState.setImageResource(R.drawable.ic_play);
+            } else {
+                holder.actionState.setImageResource(R.drawable.ic_download);
+            }
         }
         holder.actionState.setVisibility(View.VISIBLE);
         holder.progressView.hide();

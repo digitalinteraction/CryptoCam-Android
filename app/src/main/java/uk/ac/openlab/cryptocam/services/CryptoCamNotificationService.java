@@ -20,7 +20,7 @@ public class CryptoCamNotificationService {
 
     static int NOTIFICATION_ID = R.string.app_name;
 
-    static Notification getNotification(Context context){
+    public static Notification getNotification(Context context){
 
         Intent intent = new Intent(context, ScanningActivity.class);//todo need to swap out for the correct activity
         PendingIntent pendingIntent = PendingIntent.getActivity(context,(int)System.currentTimeMillis(),intent,PendingIntent.FLAG_UPDATE_CURRENT);
