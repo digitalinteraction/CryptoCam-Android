@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<syncadapter xmlns:android="http://schemas.android.com/apk/res/android"
+    android:contentAuthority="uk.ac.openlab.cryptocam.provider"
+    android:accountType="uk.ac.openlab.cryptocam"
+    android:userVisible="true"
+    android:allowParallelSyncs="false"
+    android:isAlwaysSyncable="true"
+    android:supportsUploading="false"/>

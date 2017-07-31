@@ -39,6 +39,9 @@ public class CryptoCamReceiver extends BroadcastReceiver implements ICryptoCamRe
         context.registerReceiver(receiver, filter);
     }
 
+    public static void unregisterReceiver(Context context,CryptoCamReceiver receiver){
+        context.unregisterReceiver(receiver);
+    }
 
     public static void newCamera(Context context, long id){
         Intent i = new Intent(ACTION_NEW_CAMERA);

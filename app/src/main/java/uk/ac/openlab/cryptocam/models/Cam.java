@@ -1,13 +1,14 @@
 package uk.ac.openlab.cryptocam.models;
 
 import android.content.Context;
-import android.content.Intent;
 import android.location.Location;
 
 import com.orm.SugarRecord;
 
 import java.util.List;
 import java.util.Locale;
+
+import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 
 /**
  * Created by Kyle Montague on 27/01/2017.
@@ -24,17 +25,16 @@ public class Cam extends SugarRecord {
     public Location location;
 
 
-    public final static String DATA_UPDATE_CAM = "SUGAR_RECORD.DATA_UPDATE.CAM";
     public long saveAndNotify(Context context) {
         long ID =  super.save();
-        context.sendBroadcast(new Intent(DATA_UPDATE_CAM));
+        CryptoCamReceiver.newCamera(context,ID);
         return ID;
     }
 
 
     public Cam(){
-        this.name = "";
-        this.macaddress = "";
+        this.name = null;
+        this.macaddress = null;
 
     }
 
@@ -56,6 +56,20 @@ public class Cam extends SugarRecord {
         return (count > 0);
     }
 
+    public static Cam fromMacaddress(String macaddress){
+        List<Cam> cams = Cam.find(Cam.class,"macaddress = ?", new String[]{macaddress.toLowerCase()});
+        Cam cam = null;
+        if(cams.size() == 0) {
+            cam = new Cam(null, macaddress);
+            cam.save();
+        }
+        else
+            cam = cams.get(0);
+
+        return cam;
+    }
+
+
     List<Video> getVideos(){
         return Video.find(Video.class,"cam = ?", String.valueOf(getId()));
     }
@@ -75,4 +89,7 @@ public class Cam extends SugarRecord {
         return String.format(Locale.getDefault(),"%s\n%s",name,location_type);
     }
 
+    public boolean hasDetails() {
+        return name != null && location_type != null && mode != null && version != null;
+    }
 }

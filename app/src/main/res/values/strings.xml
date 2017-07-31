@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">CryptoCam</string>
+    <string name="service_name">CryptoCam.Service</string>
     <string name="default_title">Default Title</string>
     <string name="scan_start">Start Discovery</string>
     <string name="scan_stop">Stop Discovery</string>
+    <string name="empty_text_no_cameras">No Cameras</string>
+    <string name="empty_text_no_videos">No Videos</string>
 </resources>

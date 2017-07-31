@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.PowerManager;
 
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.utility.BLERx;
@@ -11,7 +12,11 @@ import uk.ac.openlab.cryptocam.utility.Loc;
 
 public class CryptoCamScanService extends Service {
 
+    final String TAG = "CryptoCamScanService";
+
     BLERx mBle;
+    private PowerManager.WakeLock wakeLock;
+
     CryptoCamBinder mBinder = new CryptoCamBinder();
 
     public CryptoCamScanService() {
@@ -24,6 +29,13 @@ public class CryptoCamScanService extends Service {
     }
 
 
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -33,9 +45,11 @@ public class CryptoCamScanService extends Service {
             mBle = new BLERx(getBaseContext());
 
 
-        Loc.shared(getBaseContext());//initialise the shared instance of the location helper.
+//        Loc.shared(getBaseContext());//initialise the shared instance of the location helper.
 
         mBle.startScanning();
+        if(!wakeLock.isHeld())
+            wakeLock.acquire();
 
         startForeground(R.string.app_name,CryptoCamNotificationService.getNotification(this));
         return START_STICKY;
@@ -46,6 +60,9 @@ public class CryptoCamScanService extends Service {
     @Override
     public boolean stopService(Intent name) {
         mBle.stopScanning();
+        if(wakeLock.isHeld())
+            wakeLock.release();
+
         stopForeground(true);
         return super.stopService(name);
     }
@@ -63,7 +80,6 @@ public class CryptoCamScanService extends Service {
 
 
     public class CryptoCamBinder extends Binder{
-
         public CryptoCamScanService getService(){
             return CryptoCamScanService.this;
         }

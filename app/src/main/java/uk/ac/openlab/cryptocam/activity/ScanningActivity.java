@@ -1,18 +1,20 @@
 package uk.ac.openlab.cryptocam.activity;
 
 import android.Manifest;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.IBinder;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -42,6 +44,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
 
     private static final String TAG = "UI";
     RecyclerView list;
+    TextView emptyView;
     KeyListAdapter adapter;
 
 
@@ -63,40 +66,40 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
         @Override
         public void downloadedThumbnail(URI uri, long id) {
             super.downloadedThumbnail(uri, id);
-            adapter.reloadData();
+            refreshList();
         }
 
         @Override
         public void videoAdded(long id) {
             super.videoAdded(id);
-            adapter.reloadData();
+            refreshList();
         }
 
 
         @Override
         public void newVideoKey(long id) {
             super.newVideoKey(id);
-            adapter.reloadData();
+            refreshList();
         }
     };
 
 
-    CryptoCamScanService mBoundService;
-    boolean mServiceBound = false;
-    private ServiceConnection mServiceConnection = new ServiceConnection() {
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            mServiceBound = false;
-        }
-
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            CryptoCamScanService.CryptoCamBinder myBinder = (CryptoCamScanService.CryptoCamBinder) service;
-            mBoundService = myBinder.getService();
-            mServiceBound = true;
-        }
-    };
+//    CryptoCamScanService mBoundService;
+//    boolean mServiceBound = false;
+//    private ServiceConnection mServiceConnection = new ServiceConnection() {
+//
+//        @Override
+//        public void onServiceDisconnected(ComponentName name) {
+//            mServiceBound = false;
+//        }
+//
+//        @Override
+//        public void onServiceConnected(ComponentName name, IBinder service) {
+//            CryptoCamScanService.CryptoCamBinder myBinder = (CryptoCamScanService.CryptoCamBinder) service;
+//            mBoundService = myBinder.getService();
+//            mServiceBound = true;
+//        }
+//    };
 
 
     @Override
@@ -109,7 +112,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
 
 
         list = (RecyclerView)findViewById(R.id.video_recycleview);
-
+        emptyView = (TextView)findViewById(R.id.emptyView);
 
 
 
@@ -152,29 +155,16 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
     protected void onResume() {
         super.onResume();
 
+        refreshList();
 
-        switch (mMode){
-            case MODE_GROUPED:
-                adapter.loadCameras();
-                break;
-            case MODE_ALL:
-                adapter.reloadData();
-                break;
-            case MODE_SINGLE:
-                if(mCameraID!= null)
-                    adapter.loadCameraVideos(mCameraID);
-                else {
-                    adapter.loadCameras();
-                    mMode = MODE_GROUPED;
-                }
-                break;
-        }
         CryptoCamReceiver.registerReceiver(this,dataUpdateReceiver);
         checkDirectory();
 
         serviceIntent = new Intent(this, CryptoCamScanService.class);
-        bindService(serviceIntent,mServiceConnection, Context.BIND_AUTO_CREATE);
         startService(serviceIntent);
+
+
+        adapter.registerForUpdates(this);
 
     }
 
@@ -183,18 +173,76 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
         super.onPause();
         this.unregisterReceiver(dataUpdateReceiver);
 
-
-
+        adapter.unregisterForUpdates(this);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
-        if(mBoundService != null) {
-            mBoundService.stopSelf();
-            unbindService(mServiceConnection);
+//        if(mBoundService != null) {
+//            mBoundService.stopSelf();
+//            unbindService(mServiceConnection);
+//        }
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()){
+            case R.id.action_stop_scanning:
+
+                new AlertDialog.Builder(this)
+                        .setTitle("Stopping CryptoCam")
+                        .setMessage("Are you sure you want to stop scanning for CryptoCam videos? This wont start again until you next launch the app")
+                        .setPositiveButton("Yes", (dialog, which) -> {
+                            serviceIntent = new Intent(ScanningActivity.this, CryptoCamScanService.class);
+                            stopService(serviceIntent);
+                        })
+                        .setNegativeButton("No, Keep Scanning", (dialog, which) -> dialog.dismiss())
+                        .create()
+                        .show();
+
+                break;
         }
+        return true;
+    }
+
+    public void refreshList(){
+
+        try {
+            switch (mMode) {
+                case MODE_GROUPED:
+                    adapter.loadCameras();
+                    emptyView.setText(R.string.empty_text_no_cameras);
+                    break;
+                case MODE_ALL:
+                    adapter.reloadData();
+                    emptyView.setText(R.string.empty_text_no_videos);
+                    break;
+                case MODE_SINGLE:
+                    if (mCameraID != null)
+                        adapter.loadCameraVideos(mCameraID);
+                    else {
+                        adapter.loadCameras();
+                        mMode = MODE_GROUPED;
+                    }
+                    emptyView.setText(R.string.empty_text_no_videos);
+                    break;
+            }
+        }catch (Exception e){
+            Log.e(TAG,e.getMessage());
+        }
+
+        emptyView.setVisibility(adapter.getItemCount() == 0? View.VISIBLE:View.GONE);
+
     }
 
     public String getMode(){
@@ -257,7 +305,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
                         intent.setDataAndType(Uri.parse(uri), "video/*");
                         startActivity(intent);
                         holder.showProgress(false);
-                        v.localvideo = uri;
+                        v.setLocalvideo(uri);
                         v.save();
                     }
                 }

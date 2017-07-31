@@ -15,6 +15,7 @@ import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.models.Cam;
 import uk.ac.openlab.cryptocam.models.Video;
+import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 import uk.ac.openlab.cryptocam.utility.DownloadRequest;
 import uk.ac.openlab.cryptocam.utility.DownloadTask;
 
@@ -29,11 +30,57 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
     KeyListItemListener listener = null;
     Context context;
     Mode mode = Mode.CAM;
+    String cameraID = null;
 
     enum Mode{
         CAM,
         VIDEO
     }
+
+    private CryptoCamReceiver receiver = new CryptoCamReceiver(){
+        @Override
+        public void cameraAdded(long id) {
+            super.cameraAdded(id);
+            if(mode == Mode.CAM){
+                for(Video video:items){
+                    if(video.getCam().getId().equals(id))
+                        return;
+                }
+                //Not found in existing cams, should be added
+                Video video = Video.latestForCamera(id);
+                if(video!=null) {
+                    items.add(0, video);
+                    notifyItemInserted(0);
+                }
+            }
+        }
+
+        @Override
+        public void videoAdded(long id) {
+            super.videoAdded(id);
+            if(mode == Mode.VIDEO){
+                //check if this is a video I should be showing
+                if(cameraID == null){
+                    //show all video
+                }else{
+                    Video video = Video.findById(Video.class,id);
+                    if(video!=null && video.getCam().getId().toString().equals(cameraID)){
+                        items.add(0,video);
+                        notifyItemInserted(0);
+                    }
+                }
+            }
+        }
+    };
+
+    public void registerForUpdates(Context context){
+        CryptoCamReceiver.registerReceiver(context,receiver);
+    }
+
+    public void unregisterForUpdates(Context context){
+        CryptoCamReceiver.unregisterReceiver(context,receiver);
+    }
+
 
 
     private final String thumbpath = CryptoCamApplication.directory();
@@ -41,11 +88,13 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
     public KeyListAdapter(Context context, KeyListItemListener listener){
         this.listener = listener;
         this.context = context;
+        this.items = new ArrayList<>();
     }
 
 
     public void reloadData(){
         mode = Mode.VIDEO;
+        cameraID = null;
         setData(Video.find(Video.class,null,null,null,"timestamp DESC",null));
     }
 
@@ -55,22 +104,23 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
         ArrayList<Video> videos= new ArrayList<>();
         for(Cam camera:cameras){
 
-            List<Video> tmp =Video.find(Video.class,"cam = ? AND localthumb NOT NULL",new String[]{String.valueOf(camera.getId())},null,"timestamp DESC","1");
-            if(tmp.size() == 0)
-                tmp =Video.find(Video.class,"cam = ?",new String[]{String.valueOf(camera.getId())},null,"timestamp DESC","1");
+            List<Video> tmp =Video.find(Video.class,"cam = ? AND localthumb NOT NULL",new String[]{camera.getId().toString()},null,"timestamp DESC",null);
+            if(tmp.size() == 0) {
+                tmp = Video.find(Video.class,"cam = ?",new String[]{camera.getId().toString()},null,"timestamp DESC",null);
+            }
 
             if(tmp.size() > 0)
                 videos.add(tmp.get(0));
+
         }
-
-
-
+        cameraID = null;
         mode = Mode.CAM;
         setData(videos);
     }
 
     public void loadCameraVideos(String cameraID){
         mode = Mode.VIDEO;
+        this.cameraID = cameraID;
         setData(Video.find(Video.class,"cam = ?",new String[]{cameraID},null,"timestamp DESC",null));
     }
 
@@ -128,18 +178,17 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
             }
         });
 
-        //fixme could do in a thread. then call invalidate when it comes back.
-        if(items.get(position).localthumb == null && items.get(position).attemptCount < 2) {
-            items.get(position).localthumb = items.get(position).checkForLocalThumbnail(thumbpath);
+        if(items.get(position).getLocalthumb() == null && items.get(position).attemptCount < 2) {
+            items.get(position).setLocalthumb(items.get(position).checkForLocalThumbnail(thumbpath));
             items.get(position).attemptCount++;
         }
 
-        if(items.get(position).localvideo == null && items.get(position).attemptCount < 2)
-            items.get(position).localvideo = items.get(position).checkForLocalVideo(thumbpath);
+        if(items.get(position).getLocalvideo() == null && items.get(position).attemptCount < 2)
+            items.get(position).setLocalvideo(items.get(position).checkForLocalVideo(thumbpath));
 
-        if(items.get(position).localthumb != null){
+        if(items.get(position).getLocalthumb() != null){
             holder.actionState.setVisibility(View.VISIBLE);
-            holder.imageView.setImageURI(Uri.parse(items.get(position).localthumb));
+            holder.imageView.setImageURI(Uri.parse(items.get(position).getLocalthumb()));
         }else{
             holder.actionState.setVisibility(View.INVISIBLE);
             holder.imageView.setImageResource(R.mipmap.ic_launcher);
@@ -149,7 +198,7 @@ public class KeyListAdapter extends RecyclerView.Adapter<KeyListViewHolder>  {
         if(mode == Mode.CAM) {
             holder.actionState.setImageResource(R.drawable.ic_linked_camera);
         }else {
-            if (items.get(position).localvideo != null || items.get(position).checkForLocalVideo(thumbpath) != null) {
+            if (items.get(position).getLocalvideo() != null || items.get(position).checkForLocalVideo(thumbpath) != null) {
                 holder.actionState.setImageResource(R.drawable.ic_play);
             } else {
                 holder.actionState.setImageResource(R.drawable.ic_download);

@@ -13,4 +13,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
+    <TextView
+        android:id="@+id/emptyView"
+        style="@style/Base.TextAppearance.AppCompat.Title"
+        android:visibility="gone"
+        android:background="@color/cardview_light_background"
+        android:text="@string/empty_text_no_cameras"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
 </RelativeLayout>

@@ -33,9 +33,9 @@ public class Video extends SugarRecord {
     @Ignore
     public int attemptCount = 0;
 
-    public String localthumb;
-    public String localvideo;
 
+    String localthumb;
+    String localvideo;
     String encryption;
     String key;
     String iv;
@@ -44,17 +44,15 @@ public class Video extends SugarRecord {
     Cam cam;
 
 
-    public Video(){
 
-    }
-
-
-
-    public final static String DATA_UPDATE_VIDEO = "SUGAR_RECORD.DATA_UPDATE.VIDEO";
     public long saveAndNotify(Context context) {
         long ID =  super.save();
         CryptoCamReceiver.newKey(context);
         return ID;
+    }
+
+
+    public Video(){
     }
 
     public Video(CryptoCamPacket packet, String macaddress){
@@ -63,6 +61,8 @@ public class Video extends SugarRecord {
         this.key = packet.key;
         this.iv = packet.iv;
         this.url = packet.url;
+        this.localthumb = null;
+        this.localvideo = null;
         List<Cam> cams = Cam.find(Cam.class,"macaddress = ?",""+macaddress.toLowerCase());
         if(cams!=null && cams.size() > 0){
             this.cam = cams.get(0);
@@ -76,6 +76,8 @@ public class Video extends SugarRecord {
         this.timestamp = timestamp;
         this.url = url;
         this.cam = cam;
+        this.localthumb = null;
+        this.localvideo = null;
     }
 
     public Video(String encryption, String key, String iv, Date timestamp, String url, Long camID){
@@ -84,6 +86,8 @@ public class Video extends SugarRecord {
         this.iv = iv;
         this.timestamp = timestamp;
         this.url = url;
+        this.localthumb = null;
+        this.localvideo = null;
         this.cam = Cam.findById(Cam.class,camID);
     }
 
@@ -161,6 +165,27 @@ public class Video extends SugarRecord {
         return cam;
     }
 
+    public String getLocalthumb() {
+        return localthumb;
+    }
+
+    public void setLocalthumb(String localthumb) {
+        this.localthumb = localthumb;
+    }
+
+    public String getLocalvideo() {
+        return localvideo;
+    }
+
+    public void setLocalvideo(String localvideo) {
+        this.localvideo = localvideo;
+    }
 
 
+    public static Video latestForCamera(long id){
+        List<Video> videos = Video.find(Video.class,"cam = ?",new String[]{String.valueOf(id)},null,"timestamp DESC",null);
+        if(videos.size() > 0)
+            return videos.get(0);
+        return null;
+    }
 }
