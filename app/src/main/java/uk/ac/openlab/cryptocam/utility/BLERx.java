@@ -2,10 +2,9 @@ package uk.ac.openlab.cryptocam.utility;
 
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
+import com.polidea.rxandroidble.RxBleAdapterStateObservable;
 import com.polidea.rxandroidble.RxBleClient;
 import com.polidea.rxandroidble.RxBleConnection;
 import com.polidea.rxandroidble.RxBleDevice;
@@ -14,9 +13,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
+import io.realm.Realm;
 import rx.Observable;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
@@ -31,8 +31,8 @@ import uk.ac.openlab.cryptocam.models.Video;
 public class BLERx {
 
     final static String deviceName = "cc-";
-    final UUID serviceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000010"); //key service
-    final UUID characteristicUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000011"); //key char
+    final UUID keyServiceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000010"); //key service
+    final UUID characteristicCamKeyUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000011"); //key char
     final UUID camServiceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000000");
     final UUID characteristicCamVersionUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000001");
     final UUID characteristicCamNameUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000002");
@@ -44,7 +44,7 @@ public class BLERx {
 
     boolean isScanning = false;
 
-    private ArrayList<RxBleDevice> devices;
+    long reconnectIn = 30 * 1000;
 
 
     public static final String TAG = "BLERx";
@@ -52,26 +52,60 @@ public class BLERx {
 
 
     RxBleClient rxBleClient;
+    RxBleAdapterStateObservable rxBleAdapterStateObservable;
 
     Subscription scanSubscription;
+    Subscription stateSubscription;
     Context mContext;
+    boolean hasBLE = true;
 
     public BLERx(Context context){
         mContext = context;
         rxBleClient =  RxBleClient.create(mContext);
-        devices = new ArrayList<>();
+        rxBleAdapterStateObservable = new RxBleAdapterStateObservable(mContext);
+
+
+
 
     }
 
 
+
+    public void terminate(){
+        if(stateSubscription!=null && !stateSubscription.isUnsubscribed())
+            stateSubscription.unsubscribe();
+
+    }
+
     public void startScanning(){
+
+        if(stateSubscription == null || stateSubscription.isUnsubscribed()){
+            stateSubscription = rxBleAdapterStateObservable
+                    .subscribe(bleAdapterState -> {
+                        if(bleAdapterState.equals(RxBleAdapterStateObservable.BleAdapterState.STATE_TURNING_OFF) || bleAdapterState.equals(RxBleAdapterStateObservable.BleAdapterState.STATE_OFF)){
+                            //unable to scan, should stop
+                            hasBLE = false;
+                            if(isActive() && !scanSubscription.isUnsubscribed()){
+                                scanSubscription.unsubscribe();
+                            }
+
+                        }else if(bleAdapterState.equals(RxBleAdapterStateObservable.BleAdapterState.STATE_ON)){
+                            // have ble can scan
+                            hasBLE = true;
+                            if(isActive())
+                            {
+                                startScanning();
+                            }
+                        }
+                    });
+        }
+
         if(scanSubscription != null && !scanSubscription.isUnsubscribed())
             return;
 
 
-        scanSubscription = rxBleClient.scanBleDevices(serviceUUID)
+        scanSubscription = rxBleClient.scanBleDevices(keyServiceUUID)
                 .filter(rxBleScanResult -> shouldRequestKey(rxBleScanResult.getBleDevice().getBluetoothDevice()))
-                .filter(rxBleScanResult -> !devices.contains(rxBleScanResult.getBleDevice()))
                 .doOnError(error -> {
                     Log.e(TAG,error.getMessage());
                 })
@@ -81,18 +115,9 @@ public class BLERx {
                             // Process scan result here.
                             Log.d(TAG,rxBleScanResult.getBleDevice().getName());
 
-                            synchronized (devices) {
-                                Log.d(TAG,"Adding device: "+rxBleScanResult.getBleDevice().getMacAddress());
-                                if(!devices.contains(rxBleScanResult.getBleDevice()))
-                                    devices.add(rxBleScanResult.getBleDevice());
-                            }
-
-
-                            if(!Cam.exists(rxBleScanResult.getBleDevice().getMacAddress().toLowerCase())){
+                            if(!Cam.exists(Realm.getDefaultInstance(),rxBleScanResult.getBleDevice().getMacAddress().toLowerCase())){
                                 firstConnectionToDevice(rxBleScanResult.getBleDevice());
                             }else {
-
-
                                 if(rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTED)
                                     connectToDevice(rxBleScanResult.getBleDevice());
                             }
@@ -121,13 +146,11 @@ public class BLERx {
     public void firstConnectionToDevice(RxBleDevice device){
         Log.d(TAG,"Attempting first connection to:"+device.getMacAddress()+" "+device.getName());
         readEverything(device);
-
     }
 
 
     private void readEverything(RxBleDevice device){
         Observable<RxBleConnection> connectionObservable = device.establishConnection(false);
-
         connectionObservable
                 .flatMap( // get the characteristics from the service you're interested in
                         rxBleConnection -> Observable.combineLatest(
@@ -135,31 +158,23 @@ public class BLERx {
                                 rxBleConnection.readCharacteristic(characteristicCamModeUUID),
                                 rxBleConnection.readCharacteristic(characteristicCamVersionUUID),
                                 rxBleConnection.readCharacteristic(characteristicCamNameUUID),
-                                rxBleConnection.readCharacteristic(characteristicUUID),
+                                rxBleConnection.readCharacteristic(characteristicCamKeyUUID),
                                 CombinedObject::new))
                 .subscribeOn(Schedulers.newThread())
                 .take(5)
                 .subscribe(combinedObject ->
                         {
-                            Log.d(TAG,combinedObject.toString());
+                            Realm.getDefaultInstance().executeTransaction(realm -> {
+                                Cam camera = new Cam(combinedObject.name,device.getMacAddress());
+                                camera.lastseen = System.currentTimeMillis();
+                                camera.mode = combinedObject.model;
+                                camera.location = combinedObject.location;
+                                camera.version = combinedObject.version;
+                            });
+                            long interval = saveKeys(device.getMacAddress(),combinedObject.key);
+                            if(interval != Long.MIN_VALUE)
+                                reconnectIn = interval;
 
-                            Cam camera = new Cam(combinedObject.name,device.getMacAddress());
-                            camera.mode = combinedObject.model;
-                            camera.location_type = combinedObject.location;
-                            camera.version = combinedObject.version;
-                            camera.saveAndNotify(mContext);
-
-                            Handler handler = new Handler(Looper.getMainLooper());
-                            Runnable runnable = () -> connectToDevice(device);
-
-                            long reconnectIn = saveKeys(device.getMacAddress(),combinedObject.key);
-                            if(reconnectIn != Long.MIN_VALUE)
-                                handler.postDelayed(runnable,reconnectIn);
-                            else{
-                                synchronized (devices) {
-                                    devices.remove(device);
-                                }
-                            }
                         },
                         throwable -> { /* handle errors */
                             Log.e(TAG,throwable.toString());
@@ -167,191 +182,35 @@ public class BLERx {
                 );
     }
 
-
-
-
-//
-//    private void readEverything(RxBleDevice device, Cam camera){
-//        Observable<RxBleConnection> connectionObservable = establishConnection(device);
-//
-//        connectionObservable
-//                .flatMap( // get the characteristics from the service you're interested in
-//                        connection -> connection
-//                                .discoverServices()
-//                                .flatMap(services -> services
-//                                        .getService(camServiceUUID)
-//                                        .map(BluetoothGattService::getCharacteristics)
-//                                ),
-//                        Pair::new
-//                )
-//                .flatMap(connectionAndCharacteristics -> {
-//                    final RxBleConnection connection = connectionAndCharacteristics.first;
-//                    final List<BluetoothGattCharacteristic> characteristics = connectionAndCharacteristics.second;
-//                    return readInitialValues(connection, characteristics);
-//                })
-//                .subscribe(
-//                        pair -> {
-//                            if(pair.first.getUuid().equals(characteristicCamLocationUUID)){
-//                                camera.location_type = new String(pair.second, StandardCharsets.UTF_8);
-//                            }else if(pair.first.getUuid().equals(characteristicCamModeUUID)){
-//                                camera.mode = new String(pair.second, StandardCharsets.UTF_8);
-//                            }else if(pair.first.getUuid().equals(characteristicCamNameUUID)){
-//                                camera.name = new String(pair.second, StandardCharsets.UTF_8);
-//                            }else if(pair.first.getUuid().equals(characteristicCamVersionUUID)){
-//                                camera.version = new String(pair.second, StandardCharsets.UTF_8);
-//                            }
-//                            camera.save();
-//
-//                            if(camera.hasDetails()){
-//                               connectionObservable.unsubscribeOn(Schedulers.immediate());
-//                            }
-//                        },
-//                        throwable -> { /* handle errors */}
-//                );
-//    }
-
-
-
     public void connectToDevice(RxBleDevice device){
-        Log.d(TAG,"Attempting connection to:"+device.getMacAddress()+" "+device.getName());
-        Observable<RxBleConnection> connectionObservable = establishConnection(device);
-        readKeys(connectionObservable,device);
+        if(hasBLE) {
+            Log.d(TAG, "Attempting connection to:" + device.getMacAddress() + " " + device.getName());
+            Observable<RxBleConnection> connectionObservable = device.establishConnection(false).timeout(20, TimeUnit.SECONDS);
+            readKeys(connectionObservable, device);
+        }
     }
 
-
-//    public void connectToDevice(RxBleDevice device){
-//        Log.d(TAG,"Attempting connection to:"+device.getMacAddress()+" "+device.getName());
-//        Handler handler = new Handler();
-//        Runnable runnable = () -> connectToDevice(device);
-//
-//        device.establishConnection(false)
-//                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicUUID))
-//                .first()
-//                .observeOn(AndroidSchedulers.mainThread())
-//                .subscribe(characteristicValue -> {
-//                    Log.d(TAG,"Got characteristic value from"+device.getName());
-//                    String jString = new String(characteristicValue, StandardCharsets.UTF_8);
-//                    try {
-//
-//                        CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(jString));
-//                        Video video = new Video(packet,device.getMacAddress());
-//                        video.saveAndNotify(mContext);
-//
-//                        handler.postDelayed(runnable,packet.reconnectIn);
-//
-//
-//                    } catch (JSONException e) {
-//                        Log.e(TAG,e.getMessage());
-//                    }
-//                }, throwable -> {
-//                    if(throwable != null && throwable.getMessage()!=null)
-//                        Log.e(TAG,throwable.getMessage());
-//
-//                    synchronized (devices) {
-//                        devices.remove(device);
-//                    }
-//                });
-//
-//    }
 
 
     private boolean isConnected(RxBleDevice bleDevice) {
         return bleDevice.getConnectionState() == RxBleConnection.RxBleConnectionState.CONNECTED;
     }
 
-    private void readName(Observable<RxBleConnection> connectionObservable, Cam camera){
-         connectionObservable
-                 .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicCamNameUUID))
-                 .observeOn(AndroidSchedulers.mainThread())
-                 .subscribe(characteristicValue -> {
-                     String value = new String(characteristicValue, StandardCharsets.UTF_8);
-                     Log.d(TAG,"name: "+value);
-                     camera.name = value;
-                     camera.save();
-                 }, throwable -> {
-                     if(throwable != null)
-                         Log.e(TAG,throwable.toString());
-                 });
-    }
-
-    private void readVersion(Observable<RxBleConnection> connectionObservable, Cam camera){
-        connectionObservable
-                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicCamVersionUUID))
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(characteristicValue -> {
-                    String value = new String(characteristicValue, StandardCharsets.UTF_8);
-                    Log.d(TAG,"version: "+value);
-                    camera.version = value;
-                    camera.save();
-                }, throwable -> {
-                    if(throwable != null)
-                        Log.e(TAG,throwable.toString());
-                });
-    }
-
-
-    private void readModel(Observable<RxBleConnection> connectionObservable, Cam camera){
-        connectionObservable
-                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicCamModeUUID))
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(characteristicValue -> {
-                    String value = new String(characteristicValue, StandardCharsets.UTF_8);
-                    Log.d(TAG,"model: "+value);
-                    camera.mode = value;
-                    camera.save();
-                }, throwable -> {
-                    if(throwable != null)
-                        Log.e(TAG,throwable.toString());
-                });
-    }
-
-    private void readLocation(Observable<RxBleConnection> connectionObservable, Cam camera){
-        connectionObservable
-                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicCamLocationUUID))
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(characteristicValue -> {
-                    String value = new String(characteristicValue, StandardCharsets.UTF_8);
-                    Log.d(TAG,"location: "+value);
-                    camera.location_type = value;
-                    camera.save();
-                }, throwable -> {
-                    if(throwable != null)
-                        Log.e(TAG,throwable.toString());
-                });
-    }
-
-
     private void readKeys(Observable<RxBleConnection> connectionObservable, RxBleDevice device){
-
-
-        Handler handler = new Handler();
-        Runnable runnable = () -> connectToDevice(device);
-
         connectionObservable
-                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicUUID))
+                .flatMap(rxBleConnection -> rxBleConnection.readCharacteristic(characteristicCamKeyUUID))
                 .observeOn(AndroidSchedulers.mainThread())
                 .first()
                 .subscribe(characteristicValue -> {
-                    long reconnectIn = saveKeys(device.getMacAddress(),characteristicValue);
-                    if(reconnectIn != Long.MIN_VALUE)
-                        handler.postDelayed(runnable,reconnectIn);
-                    else{
-                        synchronized (devices) {
-                            devices.remove(device);
-                        }
-                    }
+                    long interval = saveKeys(device.getMacAddress(),characteristicValue);
+                    if(interval != Long.MIN_VALUE)
+                        reconnectIn = interval;
                 }, throwable -> {
                     if(throwable != null)
                         Log.e(TAG,throwable.toString());
                 });
     }
 
-
-
-    private Observable<RxBleConnection> establishConnection(RxBleDevice bleDevice) {
-        return bleDevice
-                .establishConnection(false);//               .compose(new ConnectionSharingAdapter());
-    }
 
     private void onUnsubscribe() {
         Log.d(TAG, "onUnsubscribe");
@@ -367,14 +226,16 @@ public class BLERx {
 
 
 
-
-
     private long saveKeys(String macAddress, String characteristicString){
-        Log.d("Keys",characteristicString);
         try {
             CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristicString));
-            Video video = new Video(packet,macAddress);
-            video.saveAndNotify(mContext);
+            Realm.getDefaultInstance().executeTransaction(realm -> {
+                Cam cam = Cam.fromMacaddress(realm,macAddress);
+                if(cam!=null) {
+                    cam.videos.add(new Video(packet));
+                    cam.lastseen = System.currentTimeMillis();
+                }
+            });
             return packet.reconnectIn;
 
         } catch (JSONException e) {
@@ -393,8 +254,8 @@ public class BLERx {
 
 
     boolean shouldRequestKey(BluetoothDevice device){
-        //todo check the last time
-        return true;
+        Cam cam = Cam.fromMacaddress(Realm.getDefaultInstance(),device.getAddress());
+        return (cam != null && (System.currentTimeMillis() - cam.lastseen) < reconnectIn);
     }
 
 }

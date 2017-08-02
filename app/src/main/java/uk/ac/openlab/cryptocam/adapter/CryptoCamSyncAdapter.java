@@ -10,9 +10,10 @@ import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.util.Log;
 
-import java.util.List;
 import java.util.Locale;
 
+import io.realm.Realm;
+import io.realm.RealmResults;
 import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.models.Video;
 import uk.ac.openlab.cryptocam.utility.DownloadRequest;
@@ -34,7 +35,20 @@ public class CryptoCamSyncAdapter extends AbstractThreadedSyncAdapter {
     @Override
     public void onPerformSync(Account account, Bundle extras, String authority, ContentProviderClient provider, SyncResult syncResult) {
 
-        Log.d(TAG,"Trying to sync");
+        RealmResults<Video> videoList = Video.withoutThumbnails(Realm.getDefaultInstance());
+
+        //check if we now have the file locally.
+        for(Video video:videoList){
+            String local = video.checkForLocalThumbnail(thumbpath);
+            if(local!=null){
+                Realm.getDefaultInstance().executeTransaction(realm -> Video.get(realm,video.getId()).setLocalthumb(local));
+            }
+        }
+
+
+        //update the realmresults list before downloading from the web.
+        videoList.load();
+
 
         ConnectivityManager cm = (ConnectivityManager)getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
@@ -47,7 +61,6 @@ public class CryptoCamSyncAdapter extends AbstractThreadedSyncAdapter {
         //if we have an active wifi connection then sync the thumbnails in the background.
         if(isConnected && isWiFi) {
             Log.d(TAG,"Has active wifi");
-            List<Video> videoList = Video.find(Video.class, "localthumb IS NULL");
             Log.d(TAG,String.format(Locale.ENGLISH,"Number of videos: %d",videoList.size()));
             for (Video video : videoList) {
                 new DownloadTask(getContext()).execute(new DownloadRequest(video.getThumbnailUrl(), thumbpath, video.getKey(), video.getIV()));

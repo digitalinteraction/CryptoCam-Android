@@ -6,4 +6,10 @@
     <string name="scan_stop">Stop Discovery</string>
     <string name="empty_text_no_cameras">No Cameras</string>
     <string name="empty_text_no_videos">No Videos</string>
+
+
+    <plurals name="cryptocams">
+        <item quantity="one">%d CryptoCam</item>
+        <item quantity="other">%d CryptoCams</item>
+    </plurals>
 </resources>

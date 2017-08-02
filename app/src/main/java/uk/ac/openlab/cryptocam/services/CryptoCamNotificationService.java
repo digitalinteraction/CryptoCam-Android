@@ -20,7 +20,11 @@ public class CryptoCamNotificationService {
 
     static int NOTIFICATION_ID = R.string.app_name;
 
-    public static Notification getNotification(Context context){
+    public static Notification getNotification(Context context) {
+        return getNotification(context,"Listening for video keys");
+    }
+
+    public static Notification getNotification(Context context, String text){
 
         Intent intent = new Intent(context, ScanningActivity.class);//todo need to swap out for the correct activity
         PendingIntent pendingIntent = PendingIntent.getActivity(context,(int)System.currentTimeMillis(),intent,PendingIntent.FLAG_UPDATE_CURRENT);
@@ -35,7 +39,7 @@ public class CryptoCamNotificationService {
 
         Notification notification = new NotificationCompat.Builder(context)
                 .setContentTitle(context.getString(R.string.app_name))
-                .setContentText("Listening for video keys")
+                .setContentText(text)
                 .setSmallIcon(R.mipmap.ic_notification)
                 .setContentIntent(pendingIntent)
 //                .addAction(R.drawable.ic_done_white_24px, "Finished", pendingFinish) //todo show a dialog box, are you sure you want to quit
@@ -46,6 +50,10 @@ public class CryptoCamNotificationService {
         return notification;
     }
 
+    public static void showNotification(Context context, Notification notification){
+        NotificationManager manager = (NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
+        manager.notify(NOTIFICATION_ID,notification);
+    }
 
     public static void showNotification(Context context){
         NotificationManager manager = (NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);

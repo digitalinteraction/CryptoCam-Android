@@ -18,20 +18,21 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.net.URI;
 
+import io.realm.Realm;
 import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
-import uk.ac.openlab.cryptocam.adapter.KeyListAdapter;
+import uk.ac.openlab.cryptocam.adapter.CameraListAdapter;
 import uk.ac.openlab.cryptocam.adapter.KeyListViewHolder;
+import uk.ac.openlab.cryptocam.adapter.RealmListAdapter;
+import uk.ac.openlab.cryptocam.adapter.VideoListAdapter;
 import uk.ac.openlab.cryptocam.models.Cam;
 import uk.ac.openlab.cryptocam.models.Video;
-import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
 import uk.ac.openlab.cryptocam.services.CryptoCamScanService;
 import uk.ac.openlab.cryptocam.utility.DownloadRequest;
 import uk.ac.openlab.cryptocam.utility.DownloadTask;
 
-public class ScanningActivity extends AppCompatActivity implements KeyListAdapter.KeyListItemListener{
+public class ScanningActivity extends AppCompatActivity{
 
 
     public static final String EXTRA_MODE = "EXTRA_MODE";
@@ -45,7 +46,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
     private static final String TAG = "UI";
     RecyclerView list;
     TextView emptyView;
-    KeyListAdapter adapter;
+    RealmListAdapter adapter;
 
 
     Intent serviceIntent;
@@ -56,60 +57,10 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
 
     String path = CryptoCamApplication.directory();
 
-
-    CryptoCamReceiver dataUpdateReceiver = new CryptoCamReceiver() {
-        @Override
-        public void downloadedVideo(URI uri, long id) {
-            super.downloadedVideo(uri, id);
-        }
-
-        @Override
-        public void downloadedThumbnail(URI uri, long id) {
-            super.downloadedThumbnail(uri, id);
-            refreshList();
-        }
-
-        @Override
-        public void videoAdded(long id) {
-            super.videoAdded(id);
-            refreshList();
-        }
-
-
-        @Override
-        public void newVideoKey(long id) {
-            super.newVideoKey(id);
-            refreshList();
-        }
-    };
-
-
-//    CryptoCamScanService mBoundService;
-//    boolean mServiceBound = false;
-//    private ServiceConnection mServiceConnection = new ServiceConnection() {
-//
-//        @Override
-//        public void onServiceDisconnected(ComponentName name) {
-//            mServiceBound = false;
-//        }
-//
-//        @Override
-//        public void onServiceConnected(ComponentName name, IBinder service) {
-//            CryptoCamScanService.CryptoCamBinder myBinder = (CryptoCamScanService.CryptoCamBinder) service;
-//            mBoundService = myBinder.getService();
-//            mServiceBound = true;
-//        }
-//    };
-
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scanning);
-
-        CryptoCamReceiver.registerReceiver(this,dataUpdateReceiver);
-
-
 
         list = (RecyclerView)findViewById(R.id.video_recycleview);
         emptyView = (TextView)findViewById(R.id.emptyView);
@@ -122,15 +73,41 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
             mMode = b.getString(EXTRA_MODE,MODE_GROUPED);
         }
 
+
         int col = mMode == MODE_GROUPED? 2:1;
         GridLayoutManager glm = new GridLayoutManager(this,col);
         glm.setOrientation(LinearLayoutManager.VERTICAL);
         list.setLayoutManager(glm);
 
 
-        adapter = new KeyListAdapter(this,this);
+        if(mMode == MODE_GROUPED) {
+            adapter = new CameraListAdapter(this, this::showCameraVideos);
+            adapter.setCamData(Cam.all(Realm.getDefaultInstance()));
+        }else{
+            adapter = new VideoListAdapter(this, this::downloadAndPlay);
+            Cam camera = Cam.get(Realm.getDefaultInstance(),mCameraID);
+            if(camera!=null)
+                adapter.setVideoData(camera.getVideos());
+        }
+        adapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override
+            public void onChanged() {
+                super.onChanged();
+                updateUI();
+            }
 
+            @Override
+            public void onItemRangeInserted(int positionStart, int itemCount) {
+                super.onItemRangeInserted(positionStart, itemCount);
+                updateUI();
+            }
 
+            @Override
+            public void onItemRangeRemoved(int positionStart, int itemCount) {
+                super.onItemRangeRemoved(positionStart, itemCount);
+                updateUI();
+            }
+        });
 
         list.setAdapter(adapter);
         list.invalidate();
@@ -148,42 +125,33 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
                 this.requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1001); //Any number
             }
         }
+
+        checkDirectory();
+
     }
+
+
 
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        refreshList();
-
-        CryptoCamReceiver.registerReceiver(this,dataUpdateReceiver);
-        checkDirectory();
-
+        adapter.reload();
         serviceIntent = new Intent(this, CryptoCamScanService.class);
         startService(serviceIntent);
-
-
-        adapter.registerForUpdates(this);
 
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        this.unregisterReceiver(dataUpdateReceiver);
-
-        adapter.unregisterForUpdates(this);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
-//        if(mBoundService != null) {
-//            mBoundService.stopSelf();
-//            unbindService(mServiceConnection);
-//        }
     }
 
 
@@ -216,79 +184,37 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
         return true;
     }
 
-    public void refreshList(){
 
-        try {
-            switch (mMode) {
-                case MODE_GROUPED:
-                    adapter.loadCameras();
-                    emptyView.setText(R.string.empty_text_no_cameras);
-                    break;
-                case MODE_ALL:
-                    adapter.reloadData();
-                    emptyView.setText(R.string.empty_text_no_videos);
-                    break;
-                case MODE_SINGLE:
-                    if (mCameraID != null)
-                        adapter.loadCameraVideos(mCameraID);
-                    else {
-                        adapter.loadCameras();
-                        mMode = MODE_GROUPED;
-                    }
-                    emptyView.setText(R.string.empty_text_no_videos);
-                    break;
-            }
-        }catch (Exception e){
-            Log.e(TAG,e.getMessage());
-        }
-
+    private void updateUI(){
         emptyView.setVisibility(adapter.getItemCount() == 0? View.VISIBLE:View.GONE);
-
-    }
-
-    public String getMode(){
-        return mMode;
     }
 
 
 
-    @Override
-    public void itemSelected(int index) {
-
-        Video v = Video.findById(Video.class,adapter.getItemId(index));
-        if(v == null)
-            return;
-
-        switch (mMode){
-            case MODE_GROUPED:
-                showCameraVideos(v.getCam());
-                break;
-            default:
-                downloadAndPlay(v, index);
-                break;
-        }
-
-
-
-    }
-
-
-    private void showCameraVideos(Cam cam){
-        if(cam == null){
+    private void showCameraVideos(String id, int index){
+        if(id == null){
             Toast.makeText(this, "No Cam", Toast.LENGTH_SHORT).show();
             return;
         }
-        long id = cam.getId();
+
         Intent intent = new Intent(this,ScanningActivity.class);
-        intent.putExtra(ScanningActivity.EXTRA_CAMERA,""+id);
+        intent.putExtra(ScanningActivity.EXTRA_CAMERA,id);
         intent.putExtra(ScanningActivity.EXTRA_MODE,MODE_SINGLE);
         this.startActivity(intent);
     }
 
-    private void downloadAndPlay(Video v, int index){
+    private void downloadAndPlay(String id, int index){
+
+        Video v = Realm.getDefaultInstance().where(Video.class).equalTo("id",id).findFirst();
+        if(v == null)
+            return;
+
         String local = v.checkForLocalVideo(path);
 
         if(local == null) {
+
+            String videoId = v.getId();
+
             final KeyListViewHolder holder = (KeyListViewHolder)list.findViewHolderForAdapterPosition(index);
             holder.showProgress(true);
 
@@ -302,12 +228,16 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
                 @Override
                 public void onDownloadComplete(boolean successful, String uri) {
                     if(successful) {
+
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
                         intent.setDataAndType(Uri.parse(uri), "video/*");
                         startActivity(intent);
                         holder.showProgress(false);
-                        v.setLocalvideo(uri);
-                        v.save();
+
+                        Realm.getDefaultInstance().executeTransaction(realm -> {
+                            Video video = realm.where(Video.class).equalTo("id",videoId).findFirst();
+                            video.setLocalvideo(uri);
+                        });
                     }
                 }
             };
@@ -325,8 +255,7 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
         File f = new File(path);
         if(!f.exists())
             return f.mkdirs();
-
-
         return true;
     }
+
 }

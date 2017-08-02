@@ -9,6 +9,8 @@ import com.orm.SugarContext;
 
 import java.io.File;
 
+import io.realm.Realm;
+import io.realm.RealmConfiguration;
 import uk.ac.openlab.cryptocam.utility.PrefUtils;
 
 /**
@@ -25,7 +27,9 @@ public class CryptoCamApplication extends Application {
         super.onCreate();
 
         FirebaseApp.initializeApp(this);
-        SugarContext.init(this);
+        Realm.init(getApplicationContext());
+        RealmConfiguration config = new RealmConfiguration.Builder().schemaVersion(0).build();
+        Realm.setDefaultConfiguration(config);
 
 
         try {

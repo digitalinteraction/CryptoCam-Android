@@ -1,4 +1,6 @@
 apply plugin: 'com.android.application'
+apply plugin: 'me.tatarka.retrolambda'
+
 
 android {
     compileSdkVersion 25
@@ -14,20 +16,26 @@ android {
         buildConfigField 'String', 'APP_NAME', "\"cryptocam\""
         buildConfigField 'Integer', 'SYNC_INTERVAL_MINUTES', "2"
 
-        jackOptions {
-            enabled true
+        retrolambda {
+            javaVersion JavaVersion.VERSION_1_6
+            defaultMethods false
+            incremental true
         }
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
-    }
+
+
 
     sourceSets {
         main {
@@ -52,10 +60,12 @@ dependencies {
     compile 'com.google.firebase:firebase-core:10.2.6'
     compile 'com.google.firebase:firebase-crash:10.2.6'
 
-    compile 'com.tbruyelle.rxpermissions2:rxpermissions:0.9.4@aar'
+//    compile 'com.tbruyelle.rxpermissions2:rxpermissions:0.9.4@aar'
 
 
 
     testCompile 'junit:junit:4.12'
 
 }
+
+apply plugin: 'realm-android'

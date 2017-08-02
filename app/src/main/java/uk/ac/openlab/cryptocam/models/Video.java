@@ -1,8 +1,5 @@
 package uk.ac.openlab.cryptocam.models;
 
-import android.content.Context;
-
-import com.orm.SugarRecord;
 import com.orm.dsl.Ignore;
 
 import java.io.File;
@@ -10,17 +7,25 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
-import uk.ac.openlab.cryptocam.services.CryptoCamReceiver;
+import io.realm.Realm;
+import io.realm.RealmObject;
+import io.realm.RealmResults;
+import io.realm.Sort;
+import io.realm.annotations.PrimaryKey;
 import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
 
 /**
  * Created by Kyle Montague on 27/01/2017.
  */
 
-public class Video extends SugarRecord {
+public class Video extends RealmObject {
+
+
+    @PrimaryKey
+    public String id = UUID.randomUUID().toString();
 
     @Ignore
     private static final String VIDEO_FORMAT = ".mp4";
@@ -41,15 +46,10 @@ public class Video extends SugarRecord {
     String iv;
     Date timestamp;
     String url;
-    Cam cam;
 
 
 
-    public long saveAndNotify(Context context) {
-        long ID =  super.save();
-        CryptoCamReceiver.newKey(context);
-        return ID;
-    }
+
 
 
     public Video(){
@@ -57,7 +57,7 @@ public class Video extends SugarRecord {
         this.localvideo = null;
     }
 
-    public Video(CryptoCamPacket packet, String macaddress){
+    public Video(CryptoCamPacket packet){
         this.timestamp = new Date();
         this.encryption = packet.encryption;
         this.key = packet.key;
@@ -65,10 +65,7 @@ public class Video extends SugarRecord {
         this.url = packet.url;
         this.localthumb = null;
         this.localvideo = null;
-        List<Cam> cams = Cam.find(Cam.class,"macaddress = ?",""+macaddress.toLowerCase());
-        if(cams!=null && cams.size() > 0){
-            this.cam = cams.get(0);
-        }
+
     }
 
     public Video(String encryption, String key, String iv, Date timestamp, String url, Cam cam){
@@ -77,7 +74,6 @@ public class Video extends SugarRecord {
         this.iv = iv;
         this.timestamp = timestamp;
         this.url = url;
-        this.cam = cam;
         this.localthumb = null;
         this.localvideo = null;
     }
@@ -90,7 +86,6 @@ public class Video extends SugarRecord {
         this.url = url;
         this.localthumb = null;
         this.localvideo = null;
-        this.cam = Cam.findById(Cam.class,camID);
     }
 
 
@@ -121,6 +116,13 @@ public class Video extends SugarRecord {
     }
 
 
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public String checkForLocalVideo(String filepath){
         try {
@@ -129,8 +131,6 @@ public class Video extends SugarRecord {
 
             File file = new File(filepath,parts[parts.length-1]);
             if(file.exists()) {
-                localvideo = file.getAbsolutePath();
-                save();
                 return file.getAbsolutePath();
             }
         } catch (MalformedURLException e) {
@@ -148,8 +148,6 @@ public class Video extends SugarRecord {
 
             File file = new File(filepath,parts[parts.length-1]);
             if(file.exists()) {
-                localthumb = file.getAbsolutePath();
-                save();
                 return file.getAbsolutePath();
             }
         } catch (MalformedURLException e) {
@@ -163,9 +161,6 @@ public class Video extends SugarRecord {
         return simpleDateFormat.format(timestamp);
     }
 
-    public Cam getCam() {
-        return cam;
-    }
 
     public String getLocalthumb() {
         return localthumb;
@@ -184,10 +179,19 @@ public class Video extends SugarRecord {
     }
 
 
-    public static Video latestForCamera(long id){
-        List<Video> videos = Video.find(Video.class,"cam = ?",new String[]{String.valueOf(id)},null,"timestamp DESC",null);
-        if(videos.size() > 0)
-            return videos.get(0);
-        return null;
+//    public static Video latestForCamera(long id){
+//        List<Video> videos = Video.find(Video.class,"cam = ?",new String[]{String.valueOf(id)},null,"timestamp DESC",null);
+//        if(videos.size() > 0)
+//            return videos.get(0);
+//        return null;
+//    }
+
+    public static RealmResults<Video> withoutThumbnails(Realm realm){
+        return realm.where(Video.class).isNull("localthumb").findAllSorted("timestamp", Sort.ASCENDING);
+    }
+
+
+    public static Video get(Realm realm, String id) {
+        return realm.where(Video.class).equalTo("id",id).findFirst();
     }
 }
