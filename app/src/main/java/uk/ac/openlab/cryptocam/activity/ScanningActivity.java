@@ -202,9 +202,10 @@ public class ScanningActivity extends AppCompatActivity implements KeyListAdapte
                 new AlertDialog.Builder(this)
                         .setTitle("Stopping CryptoCam")
                         .setMessage("Are you sure you want to stop scanning for CryptoCam videos? This wont start again until you next launch the app")
-                        .setPositiveButton("Yes", (dialog, which) -> {
+                        .setPositiveButton("Yes, Quit", (dialog, which) -> {
                             serviceIntent = new Intent(ScanningActivity.this, CryptoCamScanService.class);
                             stopService(serviceIntent);
+                            finish();
                         })
                         .setNegativeButton("No, Keep Scanning", (dialog, which) -> dialog.dismiss())
                         .create()

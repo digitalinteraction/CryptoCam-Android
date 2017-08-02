@@ -53,6 +53,8 @@ public class Video extends SugarRecord {
 
 
     public Video(){
+        this.localthumb = null;
+        this.localvideo = null;
     }
 
     public Video(CryptoCamPacket packet, String macaddress){
