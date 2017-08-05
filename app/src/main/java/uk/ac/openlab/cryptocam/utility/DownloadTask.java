@@ -2,7 +2,6 @@ package uk.ac.openlab.cryptocam.utility;
 
 import android.content.Context;
 import android.os.AsyncTask;
-import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.FileOutputStream;
@@ -26,14 +25,11 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
     public static final String TAG = "DownloadTask";
     private Context context;
     private DownloadTaskProgress progressListener = null;
-    private PowerManager.WakeLock mWakeLock;
 
-    public DownloadTask(Context context) {
-        this.context = context;
+    public DownloadTask() {
     }
 
-    public DownloadTask(Context context, DownloadTaskProgress progressListener){
-        this.context=context;
+    public DownloadTask(DownloadTaskProgress progressListener){
         this.progressListener = progressListener;
     }
 
@@ -102,12 +98,6 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
     @Override
     protected void onPreExecute() {
         super.onPreExecute();
-        // take CPU lock to prevent CPU from going off if the user
-        // presses the power button during download
-        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
-                getClass().getName());
-        mWakeLock.acquire();
     }
 
     @Override
@@ -120,7 +110,6 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
 
     @Override
     protected void onPostExecute(String result) {
-        mWakeLock.release();
         if(progressListener!=null)
             progressListener.onDownloadComplete(result!=null,result);
 

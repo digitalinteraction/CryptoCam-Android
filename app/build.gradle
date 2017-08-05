@@ -62,6 +62,7 @@ dependencies {
 
 //    compile 'com.tbruyelle.rxpermissions2:rxpermissions:0.9.4@aar'
 
+    compile 'io.realm:android-adapters:2.1.0'
 
 
     testCompile 'junit:junit:4.12'

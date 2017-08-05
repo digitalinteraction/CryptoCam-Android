@@ -1,6 +1,7 @@
 package uk.ac.openlab.cryptocam.activity;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -18,13 +19,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.Objects;
 
 import io.realm.Realm;
+import io.realm.RealmRecyclerViewAdapter;
 import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.adapter.CameraListAdapter;
 import uk.ac.openlab.cryptocam.adapter.KeyListViewHolder;
-import uk.ac.openlab.cryptocam.adapter.RealmListAdapter;
 import uk.ac.openlab.cryptocam.adapter.VideoListAdapter;
 import uk.ac.openlab.cryptocam.models.Cam;
 import uk.ac.openlab.cryptocam.models.Video;
@@ -32,22 +34,46 @@ import uk.ac.openlab.cryptocam.services.CryptoCamScanService;
 import uk.ac.openlab.cryptocam.utility.DownloadRequest;
 import uk.ac.openlab.cryptocam.utility.DownloadTask;
 
-public class ScanningActivity extends AppCompatActivity{
+public class ScanningActivity extends AppCompatActivity {
 
 
     public static final String EXTRA_MODE = "EXTRA_MODE";
     public static final String EXTRA_CAMERA = "EXTRA_CAMERA";
 
     public static final String MODE_GROUPED = "EXTRA_MODE_GROUPED";
-    public static final String MODE_ALL = "EXTRA_MODE_ALL";
+//    public static final String MODE_ALL = "EXTRA_MODE_ALL";
     public static final String MODE_SINGLE = "EXTRA_MODE_SINGLE";
 
 
     private static final String TAG = "UI";
     RecyclerView list;
     TextView emptyView;
-    RealmListAdapter adapter;
+    CameraListAdapter adapter;
+    VideoListAdapter videoAdapter;
 
+
+
+    RecyclerView.AdapterDataObserver dataObserver = new RecyclerView.AdapterDataObserver() {
+        @Override
+        public void onChanged() {
+            super.onChanged();
+            updateUI();
+        }
+
+        @Override
+        public void onItemRangeInserted(int positionStart, int itemCount) {
+            super.onItemRangeInserted(positionStart, itemCount);
+            updateUI();
+        }
+
+        @Override
+        public void onItemRangeRemoved(int positionStart, int itemCount) {
+            super.onItemRangeRemoved(positionStart, itemCount);
+            updateUI();
+        }
+
+
+    };
 
     Intent serviceIntent;
 
@@ -55,12 +81,14 @@ public class ScanningActivity extends AppCompatActivity{
     private String mMode = "EXTRA_MODE_GROUPED";
     private String mCameraID = null;
 
-    String path = CryptoCamApplication.directory();
+    String path;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scanning);
+
+        path = CryptoCamApplication.directory();
 
         list = (RecyclerView)findViewById(R.id.video_recycleview);
         emptyView = (TextView)findViewById(R.id.emptyView);
@@ -74,49 +102,31 @@ public class ScanningActivity extends AppCompatActivity{
         }
 
 
-        int col = mMode == MODE_GROUPED? 2:1;
+        int col = Objects.equals(mMode, MODE_GROUPED) ? 2:1;
         GridLayoutManager glm = new GridLayoutManager(this,col);
         glm.setOrientation(LinearLayoutManager.VERTICAL);
         list.setLayoutManager(glm);
 
 
-        if(mMode == MODE_GROUPED) {
-            adapter = new CameraListAdapter(this, this::showCameraVideos);
-            adapter.setCamData(Cam.all(Realm.getDefaultInstance()));
+        if(Objects.equals(mMode, MODE_GROUPED)) {
+            adapter = new CameraListAdapter(Cam.all(Realm.getDefaultInstance()), true, (id, index) -> showCameraVideos(id,index));
+            adapter.registerAdapterDataObserver(dataObserver);
+            list.setAdapter(adapter);
+
         }else{
-            adapter = new VideoListAdapter(this, this::downloadAndPlay);
-            Cam camera = Cam.get(Realm.getDefaultInstance(),mCameraID);
-            if(camera!=null)
-                adapter.setVideoData(camera.getVideos());
+            Cam cam = Cam.get(Realm.getDefaultInstance(),mCameraID);
+            videoAdapter = new VideoListAdapter(cam.getVideos(), true, (id, index) -> downloadAndPlay(id,index));
+            videoAdapter.registerAdapterDataObserver(dataObserver);
+            list.setAdapter(videoAdapter);
         }
-        adapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-            @Override
-            public void onChanged() {
-                super.onChanged();
-                updateUI();
-            }
 
-            @Override
-            public void onItemRangeInserted(int positionStart, int itemCount) {
-                super.onItemRangeInserted(positionStart, itemCount);
-                updateUI();
-            }
-
-            @Override
-            public void onItemRangeRemoved(int positionStart, int itemCount) {
-                super.onItemRangeRemoved(positionStart, itemCount);
-                updateUI();
-            }
-        });
-
-        list.setAdapter(adapter);
         list.invalidate();
 
 
 
 
         // Quick permission check
-        int permissionCheck = 0;
+        int permissionCheck;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             permissionCheck = this.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION);
             permissionCheck += this.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION);
@@ -127,6 +137,8 @@ public class ScanningActivity extends AppCompatActivity{
         }
 
         checkDirectory();
+        checkBluetooth();
+
 
     }
 
@@ -136,12 +148,10 @@ public class ScanningActivity extends AppCompatActivity{
     @Override
     protected void onResume() {
         super.onResume();
-
-        adapter.reload();
-        serviceIntent = new Intent(this, CryptoCamScanService.class);
-        startService(serviceIntent);
-
+        updateUI();
     }
+
+
 
     @Override
     protected void onPause() {
@@ -154,6 +164,48 @@ public class ScanningActivity extends AppCompatActivity{
 
     }
 
+
+
+    int REQUEST_ENABLE_BT = 1;
+    private void checkBluetooth() {
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (mBluetoothAdapter == null) {
+            // Device does not support Bluetooth
+        } else {
+            if (!mBluetoothAdapter.isEnabled()) {
+                Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                this.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+            }else{
+                startScanning();
+            }
+        }
+    }
+
+    private void startScanning() {
+        serviceIntent = new Intent(this, CryptoCamScanService.class);
+        startService(serviceIntent);
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(requestCode == REQUEST_ENABLE_BT){
+            if(resultCode == RESULT_OK) {
+                startScanning();
+            }else{
+                new AlertDialog.Builder(ScanningActivity.this)
+                        .setTitle("Bluetooth")
+                        .setMessage("Your bluetooth is currently disabled. Cryptocam is unable to scan for nearby videos without bluetooth enabled.")
+                        .setPositiveButton("Activate", (dialog, which) -> {
+                            dialog.dismiss();
+                            checkBluetooth();
+                        })
+                        .setNegativeButton("Quit", (dialog, which) -> finish())
+                        .create().show();
+            }
+        }
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -186,7 +238,14 @@ public class ScanningActivity extends AppCompatActivity{
 
 
     private void updateUI(){
-        emptyView.setVisibility(adapter.getItemCount() == 0? View.VISIBLE:View.GONE);
+        RealmRecyclerViewAdapter a = mMode.equals(MODE_GROUPED)? adapter:videoAdapter;
+        if(a.getItemCount() == 0) {
+            emptyView.setVisibility(View.VISIBLE);
+            emptyView.setText(mMode.equals(MODE_GROUPED)?R.string.empty_text_no_cameras:R.string.empty_text_no_videos);
+        }else{
+            emptyView.setVisibility(View.GONE);
+            list.setVisibility(View.VISIBLE);
+        }
     }
 
 
@@ -241,7 +300,7 @@ public class ScanningActivity extends AppCompatActivity{
                     }
                 }
             };
-            new DownloadTask(this,progress).execute(request);
+            new DownloadTask(progress).execute(request);
         }else{
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(local));
             intent.setDataAndType(Uri.parse(local), "video/*");
@@ -251,11 +310,9 @@ public class ScanningActivity extends AppCompatActivity{
 
 
 
-    private boolean checkDirectory(){
+    private boolean checkDirectory() {
         File f = new File(path);
-        if(!f.exists())
-            return f.mkdirs();
-        return true;
+        return f.exists() || f.mkdirs();
     }
 
 }

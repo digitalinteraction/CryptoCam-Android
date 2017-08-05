@@ -1,13 +1,16 @@
 package uk.ac.openlab.cryptocam.adapter;
 
-import android.content.Context;
 import android.net.Uri;
+import android.support.annotation.Nullable;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import io.realm.OrderedRealmCollection;
 import io.realm.Realm;
 import io.realm.RealmChangeListener;
+import io.realm.RealmRecyclerViewAdapter;
 import io.realm.RealmResults;
 import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
@@ -20,42 +23,45 @@ import uk.ac.openlab.cryptocam.utility.DownloadTask;
  * Created by Kyle Montague on 13/02/2017.
  */
 
-public class CameraListAdapter extends RealmListAdapter  {
+public class CameraListAdapter extends RealmRecyclerViewAdapter<Cam, KeyListViewHolder> {
 
 
-    RealmResults<Cam> items;
+    private static final String TAG = "CameraAdapter";
     RecyclerViewItemClicked listener = null;
-    Context context;
+    private String thumbpath;
 
     private RealmChangeListener realmChangeListener = o -> {
-        //todo might need to load again.
+        Log.d(TAG,"CAMERA LIST CHANGED");
         notifyDataSetChanged();
     };
 
-    private final String thumbpath = CryptoCamApplication.directory();
 
-    public CameraListAdapter(Context context, RecyclerViewItemClicked listener){
+    public CameraListAdapter(@Nullable OrderedRealmCollection<Cam> data, boolean autoUpdate, RecyclerViewItemClicked listener) {
+        super(data, autoUpdate);
         this.listener = listener;
-        this.context = context;
+        this.thumbpath = CryptoCamApplication.directory();
+
+    }
+
+    public CameraListAdapter(@Nullable OrderedRealmCollection<Cam> data, boolean autoUpdate) {
+        super(data, autoUpdate);
+        this.thumbpath = CryptoCamApplication.directory();
     }
 
     @Override
-    public void setCamData(RealmResults<Cam> cameras){
-        items = cameras;
-        if(items!=null && items.size() >0) {
-            items.addChangeListener(realmChangeListener);
-            for(Cam cam:items) {
-                getThumbnails(cam.getVideosWithThumbnails().first());
+    public void updateData(@Nullable OrderedRealmCollection<Cam> data) {
+        super.updateData(data);
+        if(getData()!=null) {
+            for (Cam cam : getData()) {
+                RealmResults<Video> videos = cam.getVideosWithThumbnails();
+                if (videos.size() > 0) {
+                    getThumbnails(videos.first());
+                }
             }
-            notifyDataSetChanged();
         }
     }
 
-    @Override
-    public void reload(){
-        if(items!=null)
-            items.load();
-    }
+
 
     @Override
     public ViewHolder onCreateViewHolder(final ViewGroup parent, int viewType) {
@@ -68,8 +74,8 @@ public class CameraListAdapter extends RealmListAdapter  {
 
 
     private void itemClicked(int index) {
-        if(listener!=null){
-            listener.itemSelected(items.get(index).getId(),index);
+        if(listener!=null && getData()!=null){
+            listener.itemSelected(getData().get(index).getId(),index);
         }
     }
 
@@ -79,22 +85,36 @@ public class CameraListAdapter extends RealmListAdapter  {
     @Override
     public void onBindViewHolder(final KeyListViewHolder holder, int position) {
 
+        Cam cam = getItem(holder.getAdapterPosition());
+        assert cam != null;
 
-        Cam cam = items.get(holder.getAdapterPosition());
-        Video video = cam.getVideosWithThumbnails().first();
-        String text = cam.description();
-
-        holder.title.setText(text);
-        holder.interactiveArea.setOnClickListener(v -> itemClicked(holder.getAdapterPosition()));
-
-        if(video.getLocalthumb() == null) {
-            video.checkForLocalThumbnail(thumbpath);
+        RealmResults<Video> videos = cam.getVideosWithThumbnails();
+        Video video = null;
+        if(videos.size() == 0){
+            videos = cam.getVideos();
         }
 
-        if(video.getLocalvideo() == null)
-            video.checkForLocalVideo(thumbpath);
+        if(videos.size() >0){
+            video = videos.first();
+        }
 
-        if(video.getLocalthumb() != null){
+
+        String text = cam.description();
+        holder.title.setText(text);
+
+        holder.interactiveArea.setOnClickListener(v -> itemClicked(holder.getAdapterPosition()));
+
+        if(video!=null) {
+            if (video.getLocalthumb() == null) {
+                video.checkForLocalThumbnail(thumbpath);
+            }
+
+            if (video.getLocalvideo() == null)
+                video.checkForLocalVideo(thumbpath);
+
+        }
+
+        if(video!= null && video.getLocalthumb() != null){
             holder.actionState.setVisibility(View.VISIBLE);
             holder.imageView.setImageURI(Uri.parse(video.getLocalthumb()));
         }else{
@@ -103,16 +123,13 @@ public class CameraListAdapter extends RealmListAdapter  {
         }
 
 
-        holder.actionState.setImageResource(R.drawable.ic_linked_camera);
-        holder.actionState.setVisibility(View.VISIBLE);
+//        holder.actionState.setImageResource(R.drawable.ic_linked_camera);
+        holder.actionState.setVisibility(View.GONE);
         holder.progressView.hide();
 
     }
 
-    @Override
-    public int getItemCount() {
-        return items.size();
-    }
+
 
     public class ViewHolder extends KeyListViewHolder {
         public ViewHolder(View itemView) {
@@ -135,7 +152,7 @@ public class CameraListAdapter extends RealmListAdapter  {
                     v.setLocalthumb(local);
                 });
                 DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(),thumbpath,video.getKey(),video.getIV());
-                new DownloadTask(context).execute(request);
+                new DownloadTask().execute(request);
             }
 
     }

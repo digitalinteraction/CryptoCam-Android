@@ -1,14 +1,14 @@
 package uk.ac.openlab.cryptocam.adapter;
 
-import android.content.Context;
 import android.net.Uri;
+import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import io.realm.OrderedRealmCollection;
 import io.realm.Realm;
-import io.realm.RealmChangeListener;
-import io.realm.RealmResults;
+import io.realm.RealmRecyclerViewAdapter;
 import uk.ac.openlab.cryptocam.CryptoCamApplication;
 import uk.ac.openlab.cryptocam.R;
 import uk.ac.openlab.cryptocam.models.Video;
@@ -19,43 +19,29 @@ import uk.ac.openlab.cryptocam.utility.DownloadTask;
  * Created by Kyle Montague on 13/02/2017.
  */
 
-public class VideoListAdapter extends RealmListAdapter  {
+public class VideoListAdapter extends RealmRecyclerViewAdapter<Video, KeyListViewHolder> {
 
 
-    RealmResults<Video> items;
     RecyclerViewItemClicked listener = null;
-    Context context;
+    private String thumbpath = CryptoCamApplication.directory();
 
-    RealmChangeListener realmChangeListener = o -> {
-        //todo might need to load again.
-        notifyDataSetChanged();
-    };
-
-    private final String thumbpath = CryptoCamApplication.directory();
-
-    public VideoListAdapter(Context context, RecyclerViewItemClicked listener){
+    public VideoListAdapter(@Nullable OrderedRealmCollection<Video> data, boolean autoUpdate, RecyclerViewItemClicked listener) {
+        super(data, autoUpdate);
         this.listener = listener;
-        this.context = context;
     }
 
     @Override
-    public void setVideoData(RealmResults<Video> videos){
-        items = videos;
-        if(items!=null && items.size() >0) {
-            items.addChangeListener(realmChangeListener);
-
-            for(Video video:items.where().isNotNull("localthumb").findAll()) {
+    public void updateData(@Nullable OrderedRealmCollection<Video> data) {
+        super.updateData(data);
+        if(data!=null && data.size() >0) {
+            assert getData() != null;
+            for(Video video:getData().where().isNotNull("localthumb").findAll()) {
                 getThumbnails(video);
             }
             notifyDataSetChanged();
         }
     }
 
-    @Override
-    public void reload(){
-        if(items!=null)
-            items.load();
-    }
 
     @Override
     public ViewHolder onCreateViewHolder(final ViewGroup parent, int viewType) {
@@ -66,10 +52,9 @@ public class VideoListAdapter extends RealmListAdapter  {
     }
 
 
-
     private void itemClicked(int index) {
         if(listener!=null){
-            listener.itemSelected(items.get(index).getId(),index);
+            listener.itemSelected(getItem(index).getId(),index);
         }
     }
 
@@ -80,7 +65,9 @@ public class VideoListAdapter extends RealmListAdapter  {
     public void onBindViewHolder(final KeyListViewHolder holder, int position) {
 
 
-        Video video = items.get(holder.getAdapterPosition());
+
+        Video video = getItem(holder.getAdapterPosition());
+        assert video != null;
         String text = video.getDateString();
 
         holder.title.setText(text);
@@ -108,10 +95,7 @@ public class VideoListAdapter extends RealmListAdapter  {
 
     }
 
-    @Override
-    public int getItemCount() {
-        return items.size();
-    }
+
 
     public class ViewHolder extends KeyListViewHolder {
         public ViewHolder(View itemView) {
@@ -134,7 +118,7 @@ public class VideoListAdapter extends RealmListAdapter  {
                     v.setLocalthumb(local);
                 });
                 DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(),thumbpath,video.getKey(),video.getIV());
-                new DownloadTask(context).execute(request);
+                new DownloadTask().execute(request);
             }
 
     }

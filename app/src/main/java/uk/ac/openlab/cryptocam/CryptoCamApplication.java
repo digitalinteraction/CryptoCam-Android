@@ -1,7 +1,7 @@
 package uk.ac.openlab.cryptocam;
 
 import android.app.Application;
-import android.os.Environment;
+import android.content.Context;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.crash.FirebaseCrash;
@@ -20,6 +20,12 @@ import uk.ac.openlab.cryptocam.utility.PrefUtils;
 public class CryptoCamApplication extends Application {
 
 
+    static String directory = "";
+    static Context context;
+
+    public static Context getContext() {
+        return context;
+    }
 
 
     @Override
@@ -30,7 +36,8 @@ public class CryptoCamApplication extends Application {
         Realm.init(getApplicationContext());
         RealmConfiguration config = new RealmConfiguration.Builder().schemaVersion(0).build();
         Realm.setDefaultConfiguration(config);
-
+        directory = this.getCacheDir().getAbsolutePath();
+        context = getApplicationContext();
 
         try {
             File dir = new File(directory());
@@ -51,7 +58,6 @@ public class CryptoCamApplication extends Application {
 
 
     public static String directory(){
-        return Environment.getExternalStorageDirectory().getAbsolutePath()+"/"+BuildConfig.APP_NAME;
-
+        return directory;
     }
 }

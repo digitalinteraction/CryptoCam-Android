@@ -26,10 +26,11 @@ import uk.ac.openlab.cryptocam.utility.DownloadTask;
 public class CryptoCamSyncAdapter extends AbstractThreadedSyncAdapter {
 
     private final String TAG = "SyncAdapter";
-    private final String thumbpath = CryptoCamApplication.directory();
+    private String thumbpath;
 
     public CryptoCamSyncAdapter(Context context, boolean autoInitialize) {
         super(context, autoInitialize);
+        this.thumbpath = CryptoCamApplication.directory();
     }
 
     @Override
@@ -63,7 +64,7 @@ public class CryptoCamSyncAdapter extends AbstractThreadedSyncAdapter {
             Log.d(TAG,"Has active wifi");
             Log.d(TAG,String.format(Locale.ENGLISH,"Number of videos: %d",videoList.size()));
             for (Video video : videoList) {
-                new DownloadTask(getContext()).execute(new DownloadRequest(video.getThumbnailUrl(), thumbpath, video.getKey(), video.getIV()));
+                new DownloadTask().execute(new DownloadRequest(video.getThumbnailUrl(), thumbpath, video.getKey(), video.getIV()));
             }
         }
     }

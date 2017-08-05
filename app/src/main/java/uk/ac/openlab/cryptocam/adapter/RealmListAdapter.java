@@ -3,6 +3,7 @@ package uk.ac.openlab.cryptocam.adapter;
 import android.support.v7.widget.RecyclerView;
 import android.view.ViewGroup;
 
+import io.realm.OrderedRealmCollection;
 import io.realm.RealmResults;
 import uk.ac.openlab.cryptocam.models.Cam;
 import uk.ac.openlab.cryptocam.models.Video;
@@ -40,6 +41,6 @@ public class RealmListAdapter extends RecyclerView.Adapter <KeyListViewHolder>{
 
     }
 
-    public void setCamData(RealmResults<Cam> all) {
+    public void setCamData(OrderedRealmCollection<Cam> all) {
     }
 }

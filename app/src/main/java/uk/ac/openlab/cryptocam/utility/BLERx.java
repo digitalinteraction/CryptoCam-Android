@@ -8,6 +8,7 @@ import com.polidea.rxandroidble.RxBleAdapterStateObservable;
 import com.polidea.rxandroidble.RxBleClient;
 import com.polidea.rxandroidble.RxBleConnection;
 import com.polidea.rxandroidble.RxBleDevice;
+import com.polidea.rxandroidble.exceptions.BleGattException;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -59,14 +60,11 @@ public class BLERx {
     Context mContext;
     boolean hasBLE = true;
 
+
     public BLERx(Context context){
         mContext = context;
         rxBleClient =  RxBleClient.create(mContext);
         rxBleAdapterStateObservable = new RxBleAdapterStateObservable(mContext);
-
-
-
-
     }
 
 
@@ -112,17 +110,13 @@ public class BLERx {
                 .subscribeOn(Schedulers.io())
                 .subscribe(
                         rxBleScanResult -> {
-                            // Process scan result here.
-                            Log.d(TAG,rxBleScanResult.getBleDevice().getName());
-
-                            if(!Cam.exists(Realm.getDefaultInstance(),rxBleScanResult.getBleDevice().getMacAddress().toLowerCase())){
-                                firstConnectionToDevice(rxBleScanResult.getBleDevice());
-                            }else {
-                                if(rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTED)
+                            if(rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTED && rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTING) {
+                                if (!Cam.exists(Realm.getDefaultInstance(), rxBleScanResult.getBleDevice().getMacAddress())) {
+                                    firstConnectionToDevice(rxBleScanResult.getBleDevice());
+                                } else {
                                     connectToDevice(rxBleScanResult.getBleDevice());
+                                }
                             }
-
-
 
                         },
                         throwable -> {
@@ -133,7 +127,6 @@ public class BLERx {
 
         isScanning = true;
     }
-
 
 
     public void stopScanning(){
@@ -162,22 +155,32 @@ public class BLERx {
                                 CombinedObject::new))
                 .subscribeOn(Schedulers.newThread())
                 .take(5)
-                .subscribe(combinedObject ->
-                        {
+                .subscribe(combinedObject -> {
                             Realm.getDefaultInstance().executeTransaction(realm -> {
-                                Cam camera = new Cam(combinedObject.name,device.getMacAddress());
+                                Log.d(TAG, combinedObject.toString());
+                                Cam camera = new Cam();
+                                camera.name = combinedObject.name;
+                                camera.macaddress = device.getMacAddress().toLowerCase();
                                 camera.lastseen = System.currentTimeMillis();
                                 camera.mode = combinedObject.model;
                                 camera.location = combinedObject.location;
                                 camera.version = combinedObject.version;
+                                realm.copyToRealmOrUpdate(camera);
                             });
-                            long interval = saveKeys(device.getMacAddress(),combinedObject.key);
-                            if(interval != Long.MIN_VALUE)
-                                reconnectIn = interval;
 
+                            long interval = saveKeys(device.getMacAddress(), combinedObject.key);
+                            if (interval != Long.MIN_VALUE)
+                                reconnectIn = interval;
                         },
                         throwable -> { /* handle errors */
-                            Log.e(TAG,throwable.toString());
+                            if(throwable instanceof BleGattException) {
+                                BleGattException e = (BleGattException)throwable;
+                                    if(device.getConnectionState() == RxBleConnection.RxBleConnectionState.DISCONNECTING || device.getConnectionState() == RxBleConnection.RxBleConnectionState.DISCONNECTED)
+                                    {
+                                        Log.e(TAG, "removed:" + device.getMacAddress());
+                                    }
+                                }
+
                         }
                 );
     }
@@ -206,8 +209,14 @@ public class BLERx {
                     if(interval != Long.MIN_VALUE)
                         reconnectIn = interval;
                 }, throwable -> {
-                    if(throwable != null)
-                        Log.e(TAG,throwable.toString());
+                    if(throwable instanceof BleGattException) {
+                        BleGattException e = (BleGattException)throwable;
+                        if(device.getConnectionState() == RxBleConnection.RxBleConnectionState.DISCONNECTING || device.getConnectionState() == RxBleConnection.RxBleConnectionState.DISCONNECTED)
+                        {
+                            Log.e(TAG, "removed:" + device.getMacAddress());
+                        }
+                    }
+
                 });
     }
 
@@ -230,7 +239,7 @@ public class BLERx {
         try {
             CryptoCamPacket packet = CryptoCamPacket.fromJson(new JSONObject(characteristicString));
             Realm.getDefaultInstance().executeTransaction(realm -> {
-                Cam cam = Cam.fromMacaddress(realm,macAddress);
+                Cam cam = Cam.existingFromMacaddress(realm,macAddress);
                 if(cam!=null) {
                     cam.videos.add(new Video(packet));
                     cam.lastseen = System.currentTimeMillis();
@@ -254,8 +263,12 @@ public class BLERx {
 
 
     boolean shouldRequestKey(BluetoothDevice device){
-        Cam cam = Cam.fromMacaddress(Realm.getDefaultInstance(),device.getAddress());
-        return (cam != null && (System.currentTimeMillis() - cam.lastseen) < reconnectIn);
+        Cam cam = Cam.existingFromMacaddress(Realm.getDefaultInstance(),device.getAddress());
+        if(cam == null)
+            return true;
+
+        long delta = System.currentTimeMillis() - cam.lastseen;
+        return (delta >= reconnectIn);
     }
 
 }

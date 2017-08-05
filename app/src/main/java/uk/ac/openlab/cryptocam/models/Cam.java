@@ -1,5 +1,7 @@
 package uk.ac.openlab.cryptocam.models;
 
+import android.util.Log;
+
 import java.util.Locale;
 import java.util.UUID;
 
@@ -16,6 +18,7 @@ import io.realm.annotations.PrimaryKey;
 
 public class Cam extends RealmObject {
 
+    private static final String TAG = "Cam";
     @PrimaryKey
     public String id = UUID.randomUUID().toString();
 
@@ -31,22 +34,25 @@ public class Cam extends RealmObject {
 
 
     public Cam(){
-        this.name = null;
-        this.macaddress = null;
         this.videos = new RealmList<>();
-
+        this.lastseen = System.currentTimeMillis();
     }
 
     public Cam(String name, String macaddress){
         this.name = name;
         this.macaddress = macaddress.toLowerCase();
         this.videos = new RealmList<>();
+        this.lastseen = System.currentTimeMillis();
     }
 
 
 
+
+
     public static boolean exists(Realm realm, String macaddress){
-        return (realm.where(Cam.class).equalTo("macaddress",macaddress.toLowerCase()).count() > 0);
+        int count = (int)realm.where(Cam.class).equalTo("macaddress",macaddress.toLowerCase()).count();
+        Log.d(TAG,"EXISTING: "+count);
+        return (count != 0);
     }
 
     public static Cam fromMacaddress(Realm realm, String macaddress){
@@ -61,6 +67,9 @@ public class Cam extends RealmObject {
         return cam;
     }
 
+    public static Cam existingFromMacaddress(Realm realm, String macaddress){
+        return realm.where(Cam.class).equalTo("macaddress",macaddress.toLowerCase()).findFirst();
+    }
 
     public String getId() {
         return id;
@@ -121,9 +130,7 @@ public class Cam extends RealmObject {
 
 
     public String description(){
-        if(location == null)
-            location = "";
-        return String.format(Locale.getDefault(),"%s\n%s",name, location);
+        return String.format(Locale.getDefault(),"%s\n%s",getName(), getLocation());
     }
 
     public boolean hasDetails() {

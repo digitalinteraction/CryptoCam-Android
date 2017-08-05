@@ -1,5 +1,6 @@
 package uk.ac.openlab.cryptocam.activity;
 
+import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -21,10 +22,11 @@ public class SplashActivity extends AppCompatActivity {
 
         Intent intent = new Intent(this, ScanningActivity.class);
         startActivity(intent);
-//        new Thread(() -> CryptoCamAccountManager.createSyncAccount(getApplicationContext())).start();
         CryptoCamAccountManager.createSyncAccount(getApplicationContext());
-
         FirebaseApp.initializeApp(this);
+
+
+
         finish();
     }
 }
