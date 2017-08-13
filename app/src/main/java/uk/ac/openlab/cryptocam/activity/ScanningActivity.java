@@ -201,7 +201,7 @@ public class ScanningActivity extends AppCompatActivity {
                             dialog.dismiss();
                             checkBluetooth();
                         })
-                        .setNegativeButton("Quit", (dialog, which) -> finish())
+                        .setNegativeButton("Quit", (dialog, which) -> finishAffinity())
                         .create().show();
             }
         }
@@ -209,9 +209,13 @@ public class ScanningActivity extends AppCompatActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.main_menu, menu);
-        return true;
+
+        if(mMode.equals(MODE_GROUPED)) {
+            MenuInflater inflater = getMenuInflater();
+            inflater.inflate(R.menu.main_menu, menu);
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -268,9 +272,9 @@ public class ScanningActivity extends AppCompatActivity {
         if(v == null)
             return;
 
-        String local = v.checkForLocalVideo(path);
+        String local = Video.checkForLocal(path,v.getVideoUrl());
 
-        if(local == null) {
+        if(local == null || !new File(local).exists()) {
 
             String videoId = v.getId();
 

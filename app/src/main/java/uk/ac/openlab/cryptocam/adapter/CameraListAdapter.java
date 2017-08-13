@@ -7,6 +7,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import java.io.File;
+
 import io.realm.OrderedRealmCollection;
 import io.realm.Realm;
 import io.realm.RealmChangeListener;
@@ -52,11 +54,13 @@ public class CameraListAdapter extends RealmRecyclerViewAdapter<Cam, KeyListView
     public void updateData(@Nullable OrderedRealmCollection<Cam> data) {
         super.updateData(data);
         if(getData()!=null) {
+            int index = 0;
             for (Cam cam : getData()) {
                 RealmResults<Video> videos = cam.getVideosWithThumbnails();
                 if (videos.size() > 0) {
-                    getThumbnails(videos.first());
+                    getThumbnails(videos.first(),index);
                 }
+                index++;
             }
         }
     }
@@ -103,25 +107,20 @@ public class CameraListAdapter extends RealmRecyclerViewAdapter<Cam, KeyListView
         holder.title.setText(text);
 
         holder.interactiveArea.setOnClickListener(v -> itemClicked(holder.getAdapterPosition()));
-
         if(video!=null) {
             if (video.getLocalthumb() == null) {
-                video.checkForLocalThumbnail(thumbpath);
+                getThumbnails(video, holder.getAdapterPosition());
             }
 
-            if (video.getLocalvideo() == null)
-                video.checkForLocalVideo(thumbpath);
+            if (video.getLocalthumb() != null && new File(video.getLocalthumb()).exists()) {
+                holder.actionState.setVisibility(View.VISIBLE);
+                holder.imageView.setImageURI(Uri.parse(video.getLocalthumb()));
+            } else {
+                holder.actionState.setVisibility(View.INVISIBLE);
+                holder.imageView.setImageResource(R.mipmap.ic_launcher);
+            }
 
         }
-
-        if(video!= null && video.getLocalthumb() != null){
-            holder.actionState.setVisibility(View.VISIBLE);
-            holder.imageView.setImageURI(Uri.parse(video.getLocalthumb()));
-        }else{
-            holder.actionState.setVisibility(View.INVISIBLE);
-            holder.imageView.setImageResource(R.mipmap.ic_launcher);
-        }
-
 
 //        holder.actionState.setImageResource(R.drawable.ic_linked_camera);
         holder.actionState.setVisibility(View.GONE);
@@ -143,18 +142,31 @@ public class CameraListAdapter extends RealmRecyclerViewAdapter<Cam, KeyListView
 
 
     //only do on the single camera view
-    private void getThumbnails(Video video){
-            final String local = video.checkForLocalThumbnail(thumbpath);
-            final String id = video.getId();
-            if(local == null){ // we don't have the file. make a request to download it
-                Realm.getDefaultInstance().executeTransaction(realm -> {
-                    Video v = realm.where(Video.class).equalTo("id",id).findFirst();
-                    v.setLocalthumb(local);
-                });
-                DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(),thumbpath,video.getKey(),video.getIV());
-                new DownloadTask().execute(request);
+    private void getThumbnails(Video video, int index){
+
+        if(video.getLocalthumb()!= null && new File(video.getLocalthumb()).exists())
+            return;
+
+
+        final String id = video.getId();
+        DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(), thumbpath, video.getKey(), video.getIV());
+        new DownloadTask(new DownloadTask.DownloadTaskProgress(){
+
+            @Override
+            public void onProgressUpdate(int progress) {
+
             }
 
+            @Override
+            public void onDownloadComplete(boolean successful, String uri) {
+                if(successful) {
+                    Realm.getDefaultInstance().executeTransaction(realm -> {
+                        Video v = realm.where(Video.class).equalTo("id", id).findFirst();
+                        v.setLocalthumb(uri);
+                    });
+                }
+            }
+        }).execute(request);
     }
 
 

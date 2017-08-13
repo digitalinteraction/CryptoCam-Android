@@ -40,7 +40,7 @@ public class CryptoCamSyncAdapter extends AbstractThreadedSyncAdapter {
 
         //check if we now have the file locally.
         for(Video video:videoList){
-            String local = video.checkForLocalThumbnail(thumbpath);
+            String local = Video.checkForLocal(thumbpath,video.getThumbnailUrl());
             if(local!=null){
                 Realm.getDefaultInstance().executeTransaction(realm -> Video.get(realm,video.getId()).setLocalthumb(local));
             }

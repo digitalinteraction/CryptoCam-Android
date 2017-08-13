@@ -6,6 +6,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import java.io.File;
+
 import io.realm.OrderedRealmCollection;
 import io.realm.Realm;
 import io.realm.RealmRecyclerViewAdapter;
@@ -33,13 +35,7 @@ public class VideoListAdapter extends RealmRecyclerViewAdapter<Video, KeyListVie
     @Override
     public void updateData(@Nullable OrderedRealmCollection<Video> data) {
         super.updateData(data);
-        if(data!=null && data.size() >0) {
-            assert getData() != null;
-            for(Video video:getData().where().isNotNull("localthumb").findAll()) {
-                getThumbnails(video);
-            }
-            notifyDataSetChanged();
-        }
+        notifyDataSetChanged();
     }
 
 
@@ -50,6 +46,8 @@ public class VideoListAdapter extends RealmRecyclerViewAdapter<Video, KeyListVie
         return vh;
 
     }
+
+
 
 
     private void itemClicked(int index) {
@@ -73,12 +71,12 @@ public class VideoListAdapter extends RealmRecyclerViewAdapter<Video, KeyListVie
         holder.title.setText(text);
         holder.interactiveArea.setOnClickListener(v -> itemClicked(holder.getAdapterPosition()));
 
-        if(video.getLocalthumb() == null) {
-            video.checkForLocalThumbnail(thumbpath);
+
+
+        if(video.getLocalthumb() == null || !new File(video.getLocalthumb()).exists()){
+            getThumbnails(video,holder.getAdapterPosition());
         }
 
-        if(video.getLocalvideo() == null)
-            video.checkForLocalVideo(thumbpath);
 
         if(video.getLocalthumb() != null){
             holder.actionState.setVisibility(View.VISIBLE);
@@ -109,19 +107,31 @@ public class VideoListAdapter extends RealmRecyclerViewAdapter<Video, KeyListVie
 
 
     //only do on the single camera view
-    private void getThumbnails(Video video){
-            final String local = video.checkForLocalThumbnail(thumbpath);
-            final String id = video.getId();
-            if(local == null){ // we don't have the file. make a request to download it
-                Realm.getDefaultInstance().executeTransaction(realm -> {
-                    Video v = realm.where(Video.class).equalTo("id",id).findFirst();
-                    v.setLocalthumb(local);
-                });
-                DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(),thumbpath,video.getKey(),video.getIV());
-                new DownloadTask().execute(request);
+    private void getThumbnails(Video video, int index){
+
+        if(video.getLocalthumb()!= null && new File(video.getLocalthumb()).exists())
+            return;
+
+
+        final String id = video.getId();
+        DownloadRequest request = new DownloadRequest(video.getThumbnailUrl(), thumbpath, video.getKey(), video.getIV());
+        new DownloadTask(new DownloadTask.DownloadTaskProgress(){
+
+            @Override
+            public void onProgressUpdate(int progress) {
+
             }
 
+            @Override
+            public void onDownloadComplete(boolean successful, String uri) {
+                if(successful) {
+                    Realm.getDefaultInstance().executeTransaction(realm -> {
+                        Video v = realm.where(Video.class).equalTo("id", id).findFirst();
+                        v.setLocalthumb(uri);
+                    });
+                }
+            }
+        }).execute(request);
     }
-
 
 }

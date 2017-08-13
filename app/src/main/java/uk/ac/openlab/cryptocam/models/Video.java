@@ -1,21 +1,19 @@
 package uk.ac.openlab.cryptocam.models;
 
-import com.orm.dsl.Ignore;
-
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Locale;
 import java.util.UUID;
 
 import io.realm.Realm;
 import io.realm.RealmObject;
 import io.realm.RealmResults;
 import io.realm.Sort;
+import io.realm.annotations.Ignore;
 import io.realm.annotations.PrimaryKey;
 import uk.ac.openlab.cryptocam.utility.CryptoCamPacket;
+import uk.ac.openlab.cryptocam.utility.TimeUtils;
 
 /**
  * Created by Kyle Montague on 27/01/2017.
@@ -27,15 +25,13 @@ public class Video extends RealmObject {
     @PrimaryKey
     public String id = UUID.randomUUID().toString();
 
+
     @Ignore
     private static final String VIDEO_FORMAT = ".mp4";
+
     @Ignore
     private static final String THUMBNAIL_FORMAT = ".jpg";
-    @Ignore
-    private static final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd MMM - hh:mm:ss",Locale.ENGLISH);
 
-
-    @Ignore
     public int attemptCount = 0;
 
 
@@ -124,25 +120,12 @@ public class Video extends RealmObject {
         this.id = id;
     }
 
-    public String checkForLocalVideo(String filepath){
+
+
+
+    public static String checkForLocal(String filepath, String remoteFilepath){
         try {
-            URL url = new URL(getVideoUrl());
-            String[] parts = url.getFile().split("/");
-
-            File file = new File(filepath,parts[parts.length-1]);
-            if(file.exists()) {
-                return file.getAbsolutePath();
-            }
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
-
-    public String checkForLocalThumbnail(String filepath){
-        try {
-            URL url = new URL(getThumbnailUrl());
+            URL url = new URL(remoteFilepath);
 
             String[] parts = url.getFile().split("/");
 
@@ -158,7 +141,7 @@ public class Video extends RealmObject {
 
 
     public String getDateString(){
-        return simpleDateFormat.format(timestamp);
+        return TimeUtils.getRelativeTimeSpanString(this.timestamp.getTime());
     }
 
 
@@ -178,13 +161,6 @@ public class Video extends RealmObject {
         this.localvideo = localvideo;
     }
 
-
-//    public static Video latestForCamera(long id){
-//        List<Video> videos = Video.find(Video.class,"cam = ?",new String[]{String.valueOf(id)},null,"timestamp DESC",null);
-//        if(videos.size() > 0)
-//            return videos.get(0);
-//        return null;
-//    }
 
     public static RealmResults<Video> withoutThumbnails(Realm realm){
         return realm.where(Video.class).isNull("localthumb").findAllSorted("timestamp", Sort.ASCENDING);

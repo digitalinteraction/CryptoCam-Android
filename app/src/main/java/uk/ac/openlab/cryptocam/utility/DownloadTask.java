@@ -51,7 +51,11 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
             input = connection.getInputStream();
             String[] parts = url.getFile().split("/");
             local = String.format("%s/%s",requests[0].path, parts[parts.length-1]);
+
+            Log.d("Download",local);
+
             output = new FileOutputStream(local);
+
 
             SecretKeySpec sks = new SecretKeySpec(DownloadTask.hexStringToByteArray(requests[0].key), "AES/CBC/NoPadding");
             Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
@@ -76,7 +80,7 @@ public class DownloadTask extends AsyncTask<DownloadRequest, Integer, String> {
             }
             cis.close();
         } catch (Exception e) {
-            Log.e("File",e.toString());
+            Log.e("Download",e.toString());
             return null;
         } finally {
             try {
