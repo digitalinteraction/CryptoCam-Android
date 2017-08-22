@@ -29,6 +29,8 @@ public class Cam extends RealmObject {
     public String location;
 
     public long lastseen;
+    public long updatedOn = System.currentTimeMillis();
+
 
     public RealmList<Video> videos;
 
@@ -46,7 +48,13 @@ public class Cam extends RealmObject {
     }
 
 
-
+    public static long lastUpdated(Realm realm, String macaddress){
+        long lastUpdated = Long.MAX_VALUE;
+        Cam cam = existingFromMacaddress(realm,macaddress);
+        if(cam!=null)
+            lastUpdated = cam.updatedOn;
+        return lastUpdated;
+    }
 
 
     public static boolean exists(Realm realm, String macaddress){
@@ -69,6 +77,11 @@ public class Cam extends RealmObject {
 
     public static Cam existingFromMacaddress(Realm realm, String macaddress){
         return realm.where(Cam.class).equalTo("macaddress",macaddress.toLowerCase()).findFirst();
+    }
+
+
+    public void updated(){
+        this.updatedOn = System.currentTimeMillis();
     }
 
     public String getId() {

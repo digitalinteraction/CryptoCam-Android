@@ -112,12 +112,15 @@ public class ScanningActivity extends AppCompatActivity {
             adapter = new CameraListAdapter(Cam.all(Realm.getDefaultInstance()), true, (id, index) -> showCameraVideos(id,index));
             adapter.registerAdapterDataObserver(dataObserver);
             list.setAdapter(adapter);
+            setTitle(R.string.app_name);
+
 
         }else{
             Cam cam = Cam.get(Realm.getDefaultInstance(),mCameraID);
             videoAdapter = new VideoListAdapter(cam.getVideos(), true, (id, index) -> downloadAndPlay(id,index));
             videoAdapter.registerAdapterDataObserver(dataObserver);
             list.setAdapter(videoAdapter);
+            setTitle(cam.description());
         }
 
         list.invalidate();

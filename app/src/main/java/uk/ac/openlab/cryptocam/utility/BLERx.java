@@ -32,6 +32,8 @@ import uk.ac.openlab.cryptocam.models.Video;
 public class BLERx {
 
     final static String deviceName = "cc-";
+    private static final long EXPIRATION = 1000*60*60*12; //12 hours
+
     final UUID keyServiceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000010"); //key service
     final UUID characteristicCamKeyUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000011"); //key char
     final UUID camServiceUUID = UUID.fromString("cc92cc92-ca19-0000-0000-000000000000");
@@ -111,7 +113,7 @@ public class BLERx {
                 .subscribe(
                         rxBleScanResult -> {
                             if(rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTED && rxBleScanResult.getBleDevice().getConnectionState() != RxBleConnection.RxBleConnectionState.CONNECTING) {
-                                if (!Cam.exists(Realm.getDefaultInstance(), rxBleScanResult.getBleDevice().getMacAddress())) {
+                                if (!Cam.exists(Realm.getDefaultInstance(), rxBleScanResult.getBleDevice().getMacAddress()) || shouldUpdate(rxBleScanResult.getBleDevice().getBluetoothDevice())) {
                                     firstConnectionToDevice(rxBleScanResult.getBleDevice());
                                 } else {
                                     connectToDevice(rxBleScanResult.getBleDevice());
@@ -156,16 +158,23 @@ public class BLERx {
                 .subscribeOn(Schedulers.newThread())
                 .take(5)
                 .subscribe(combinedObject -> {
+
+
+
                             Realm.getDefaultInstance().executeTransaction(realm -> {
                                 Log.d(TAG, combinedObject.toString());
-                                Cam camera = new Cam();
+
+                                Cam camera = realm.where(Cam.class).equalTo("macaddress",device.getMacAddress().toLowerCase()).findFirst();
+                                if(camera == null) {
+                                    camera = new Cam(null, device.getMacAddress().toLowerCase());
+                                    realm.insert(camera);
+                                }
                                 camera.name = combinedObject.name;
-                                camera.macaddress = device.getMacAddress().toLowerCase();
                                 camera.lastseen = System.currentTimeMillis();
                                 camera.mode = combinedObject.model;
                                 camera.location = combinedObject.location;
                                 camera.version = combinedObject.version;
-                                realm.copyToRealmOrUpdate(camera);
+                                camera.updated();
                             });
 
                             long interval = saveKeys(device.getMacAddress(), combinedObject.key);
@@ -269,6 +278,12 @@ public class BLERx {
 
         long delta = System.currentTimeMillis() - cam.lastseen;
         return (delta >= reconnectIn);
+    }
+
+
+    boolean shouldUpdate(BluetoothDevice device){
+        long lastUpdated = Cam.lastUpdated(Realm.getDefaultInstance(),device.getAddress().toLowerCase());
+        return lastUpdated == Long.MIN_VALUE || (System.currentTimeMillis() - lastUpdated) >= EXPIRATION;
     }
 
 }

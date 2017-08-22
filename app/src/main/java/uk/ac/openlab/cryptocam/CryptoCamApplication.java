@@ -35,7 +35,7 @@ public class CryptoCamApplication extends Application {
 
         FirebaseApp.initializeApp(this);
         Realm.init(getApplicationContext());
-        RealmConfiguration config = new RealmConfiguration.Builder().schemaVersion(1).migration(new ModelMigration()).build();
+        RealmConfiguration config = new RealmConfiguration.Builder().schemaVersion(ModelMigration.CurrentVersion).migration(new ModelMigration()).build();
         Realm.setDefaultConfiguration(config);
         directory = Environment.getExternalStorageDirectory().getAbsolutePath()+"/"+BuildConfig.APP_NAME;
 

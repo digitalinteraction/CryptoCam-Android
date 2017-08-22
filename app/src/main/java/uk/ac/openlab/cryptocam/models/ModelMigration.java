@@ -1,7 +1,5 @@
 package uk.ac.openlab.cryptocam.models;
 
-import android.util.Log;
-
 import io.realm.DynamicRealm;
 import io.realm.RealmMigration;
 import io.realm.RealmSchema;
@@ -12,12 +10,18 @@ import io.realm.RealmSchema;
 
 public class ModelMigration implements RealmMigration {
 
+    public static final int CurrentVersion = 2;
+
     @Override
     public void migrate(DynamicRealm realm, long oldVersion, long newVersion) {
 
         RealmSchema schema = realm.getSchema();
 
-        Log.d("Model",schema.get("Video").getFieldNames().toString());
+        if(oldVersion < CurrentVersion){
+            if(!schema.get("Cam").getFieldNames().contains("updatedOn")){
+                schema.get("Cam").addField("updatedOn",long.class);
+            }
+        }
 
     }
 }
