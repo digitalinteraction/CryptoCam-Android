@@ -166,15 +166,15 @@ public class BLERx {
 
                                 Cam camera = realm.where(Cam.class).equalTo("macaddress",device.getMacAddress().toLowerCase()).findFirst();
                                 if(camera == null) {
-                                    camera = new Cam(null, device.getMacAddress().toLowerCase());
+                                    camera = new Cam(combinedObject.name, device.getMacAddress().toLowerCase());
+                                    camera.lastseen = System.currentTimeMillis();
+                                    camera.mode = combinedObject.model;
+                                    camera.location = combinedObject.location;
+                                    camera.version = combinedObject.version;
+                                    camera.updated();
                                     realm.insert(camera);
                                 }
-                                camera.name = combinedObject.name;
-                                camera.lastseen = System.currentTimeMillis();
-                                camera.mode = combinedObject.model;
-                                camera.location = combinedObject.location;
-                                camera.version = combinedObject.version;
-                                camera.updated();
+
                             });
 
                             long interval = saveKeys(device.getMacAddress(), combinedObject.key);
